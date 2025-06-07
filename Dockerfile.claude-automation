@@ -1,0 +1,27 @@
+FROM node:18-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    bash \
+    git \
+    curl \
+    openssh-client \
+    python3 \
+    py3-pip
+
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Create workspace directory
+WORKDIR /workspace
+
+# Configure git (default values, will be overridden)
+RUN git config --global user.email "claude-code@automation.com" && \
+    git config --global user.name "Claude Code Automation" && \
+    git config --global init.defaultBranch main
+
+# Set up environment
+ENV NODE_ENV=production
+
+# Default command
+CMD ["bash"]
