@@ -12,6 +12,10 @@ RUN apk add --no-cache \
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install Codex CLI globally
+# Based on the GitHub repo, Codex is available as a npm package
+RUN npm install -g codex
+
 # Create workspace directory
 WORKDIR /workspace
 

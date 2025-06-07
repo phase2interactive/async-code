@@ -64,9 +64,14 @@ def start_task():
         repo_url = data.get('repo_url')
         branch = data.get('branch', 'main')
         github_token = data.get('github_token')
+        model = data.get('model', 'claude')  # Default to claude for backward compatibility
         
         if not all([prompt, repo_url, github_token]):
             return jsonify({'error': 'prompt, repo_url, and github_token are required'}), 400
+        
+        # Validate model selection
+        if model not in ['claude', 'codex']:
+            return jsonify({'error': 'model must be either "claude" or "codex"'}), 400
         
         # Generate unique task ID
         task_id = str(uuid.uuid4())
@@ -79,6 +84,7 @@ def start_task():
             'repo_url': repo_url,
             'branch': branch,
             'github_token': github_token,
+            'model': model,
             'container_id': None,
             'commit_hash': None,
             'git_diff': None,
@@ -116,6 +122,7 @@ def get_task_status(task_id):
             'prompt': task['prompt'],
             'repo_url': task['repo_url'],
             'branch': task['branch'],
+            'model': task.get('model', 'claude'),  # Include model in response
             'commit_hash': task.get('commit_hash'),
             'error': task.get('error'),
             'created_at': task['created_at']
@@ -194,7 +201,7 @@ def run_claude_code_task(task_id):
         task = tasks[task_id]
         task['status'] = TaskStatus.RUNNING
         
-        logger.info(f"Starting Claude Code task {task_id}")
+        logger.info(f"Starting {task.get('model', 'claude').upper()} task {task_id}")
         
         # Escape special characters in prompt for shell safety
         escaped_prompt = task['prompt'].replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
@@ -203,6 +210,9 @@ def run_claude_code_task(task_id):
         env_vars = {
             'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
         }
+        
+        # Determine which CLI to use
+        model_cli = task.get('model', 'claude')
         
         # Create the command to run in container
         container_command = f'''
@@ -217,10 +227,10 @@ cd /workspace/repo
 git config user.email "claude-code@automation.com"
 git config user.name "Claude Code Automation"
 
-echo "Starting Claude Code with prompt..."
+echo "Starting {model_cli.upper()} with prompt..."
 
-# Run Claude Code with the prompt
-echo "{escaped_prompt}" | claude
+# Run the selected model CLI with the prompt
+echo "{escaped_prompt}" | {model_cli}
 
 # Check if there are changes
 if git diff --quiet; then
@@ -230,7 +240,7 @@ fi
 
 # Commit changes
 git add .
-git commit -m "Claude Code: {escaped_prompt[:100]}"
+git commit -m "{model_cli.capitalize()}: {escaped_prompt[:100]}"
 
 # Get commit hash and diff
 echo "COMMIT_HASH=$(git rev-parse HEAD)"
