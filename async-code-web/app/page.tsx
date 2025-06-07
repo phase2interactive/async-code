@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 interface Task {
     id: string;
@@ -15,7 +23,7 @@ interface Task {
 
 export default function Home() {
     const [prompt, setPrompt] = useState("");
-    const [repoUrl, setRepoUrl] = useState("https://github.com/zackproser/portfolio");
+    const [repoUrl, setRepoUrl] = useState("https://github.com/ObservedObserver/streamlit-react");
     const [branch, setBranch] = useState("main");
     const [githubToken, setGithubToken] = useState("");
     const [currentTask, setCurrentTask] = useState<Task | null>(null);
@@ -127,165 +135,249 @@ export default function Home() {
         }
     };
 
-    const getStatusColor = (status: string) => {
+    const getStatusVariant = (status: string) => {
         switch (status) {
-            case "pending": return "bg-yellow-100 text-yellow-700";
-            case "running": return "bg-blue-100 text-blue-700";
-            case "completed": return "bg-green-100 text-green-700";
-            case "failed": return "bg-red-100 text-red-700";
-            default: return "bg-gray-100 text-gray-700";
+            case "pending": return "secondary";
+            case "running": return "default";
+            case "completed": return "default";
+            case "failed": return "destructive";
+            default: return "outline";
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case "pending": return <Clock className="w-3 h-3" />;
+            case "running": return <AlertCircle className="w-3 h-3" />;
+            case "completed": return <CheckCircle className="w-3 h-3" />;
+            case "failed": return <XCircle className="w-3 h-3" />;
+            default: return null;
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
             {/* Header */}
-            <header className="bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex items-center justify-between max-w-7xl mx-auto">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">C</span>
+            <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+                <div className="container mx-auto px-6 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+                                <Code2 className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-semibold text-slate-900">Claude Code</h1>
+                                <p className="text-sm text-slate-500">AI-Powered Code Automation</p>
+                            </div>
                         </div>
-                        <span className="text-xl font-semibold">Claude Code Automation</span>
-                    </div>
-                    <div className="flex items-center gap-6">
-                        <button
+                        <Button
+                            variant="outline"
                             onClick={() => setShowTokenInput(!showTokenInput)}
-                            className="text-gray-600 hover:text-gray-900 font-medium"
+                            className="gap-2"
                         >
-                            {showTokenInput ? 'Hide' : 'Setup'} GitHub Token
-                        </button>
+                            <Github className="w-4 h-4" />
+                            {showTokenInput && "Hide"} 
+                            {!showTokenInput && "Setup"} Token
+                        </Button>
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-6 py-12">
-                <h1 className="text-4xl font-bold text-center mb-12 text-gray-900">
-                    What are we coding next?
-                </h1>
-
-                {/* GitHub Token Input */}
-                {showTokenInput && (
-                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <label className="block text-sm font-medium text-blue-900 mb-2">
-                            GitHub Personal Access Token (required for MVP)
-                        </label>
-                        <input
-                            type="password"
-                            value={githubToken}
-                            onChange={(e) => setGithubToken(e.target.value)}
-                            placeholder="ghp_..."
-                            className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <p className="text-sm text-blue-600 mt-1">
-                            Need repo access permissions for cloning and creating PRs
-                        </p>
-                    </div>
-                )}
-
-                {/* Prompt Input */}
-                <div className="mb-6">
-                    <textarea
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Enter your coding prompt here..."
-                        className="w-full px-6 py-6 text-base border border-gray-200 rounded-2xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[120px] leading-relaxed resize-none"
-                    />
+            <main className="container mx-auto px-6 py-8 max-w-4xl">
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-2">
+                        What are we coding next?
+                    </h2>
+                    <p className="text-slate-600">
+                        Describe what you want to build and Claude will analyze your repository and make the necessary changes
+                    </p>
                 </div>
 
-                {/* Repository Controls */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 2h12v11H4V4z" clipRule="evenodd" />
-                            </svg>
-                            <input
-                                type="text"
-                                value={repoUrl}
-                                onChange={(e) => setRepoUrl(e.target.value)}
-                                className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="https://github.com/owner/repo"
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            <input
-                                type="text"
-                                value={branch}
-                                onChange={(e) => setBranch(e.target.value)}
-                                className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="main"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleStartTask}
-                            disabled={isLoading || (currentTask && currentTask.status === "running")}
-                            className="px-4 py-2 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isLoading ? 'Starting...' : 'Code'}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Current Task Status */}
-                {currentTask && (
-                    <div className="mb-8">
-                        <div className="bg-white rounded-lg border border-gray-200 p-6">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={`text-sm px-2 py-1 rounded ${getStatusColor(currentTask.status)}`}>
-                                            {currentTask.status}
-                                        </span>
-                                        <h3 className="font-semibold text-gray-900">
-                                            {currentTask.prompt.substring(0, 100)}...
-                                        </h3>
-                                    </div>
-                                    <p className="text-sm text-gray-500">
-                                        {new Date(currentTask.created_at).toLocaleString()} · {currentTask.repo_url}
+                <div className="space-y-6">
+                    {/* GitHub Token Input */}
+                    {showTokenInput && (
+                        <Card className="border-blue-200 bg-blue-50/50">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Github className="w-5 h-5" />
+                                    GitHub Authentication
+                                </CardTitle>
+                                <CardDescription>
+                                    Enter your GitHub Personal Access Token to enable repository access and PR creation
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2">
+                                    <Label htmlFor="github-token">Personal Access Token</Label>
+                                    <Input
+                                        id="github-token"
+                                        type="password"
+                                        value={githubToken}
+                                        onChange={(e) => setGithubToken(e.target.value)}
+                                        placeholder="ghp_..."
+                                        className="font-mono"
+                                    />
+                                    <p className="text-sm text-blue-600">
+                                        Requires repository access permissions for cloning and creating pull requests
                                     </p>
-                                    {currentTask.error && (
-                                        <p className="text-sm text-red-600 mt-2">
-                                            Error: {currentTask.error}
-                                        </p>
-                                    )}
                                 </div>
-                                {currentTask.status === "completed" && (
-                                    <button
-                                        onClick={handleCreatePR}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                                    >
-                                        Create PR
-                                    </button>
-                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Main Input Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Code Generation Prompt</CardTitle>
+                            <CardDescription>
+                                Describe the feature, bug fix, or enhancement you want Claude to implement
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="prompt">Your Prompt</Label>
+                                <Textarea
+                                    id="prompt"
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder="e.g., Add a dark mode toggle to the navigation bar with persistent user preferences..."
+                                    className="min-h-[120px] resize-none"
+                                />
                             </div>
 
-                            {/* Git Diff Display */}
-                            {gitDiff && (
-                                <div className="mt-4">
-                                    <h4 className="font-medium text-gray-900 mb-2">Changes Made:</h4>
-                                    <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm overflow-x-auto max-h-96 overflow-y-auto">
-                                        {gitDiff}
-                                    </pre>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                            <Separator />
 
-                {/* Instructions */}
-                {!currentTask && (
-                    <div className="text-center text-gray-500">
-                        <p className="mb-2">Enter a prompt describing what you want to code</p>
-                        <p className="text-sm">Claude Code will analyze your repository and make the necessary changes</p>
-                    </div>
-                )}
+                            {/* Repository Configuration */}
+                            <div className="space-y-4">
+                                <h3 className="font-medium text-slate-900 flex items-center gap-2">
+                                    <Github className="w-4 h-4" />
+                                    Repository Settings
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="repo-url">Repository URL</Label>
+                                        <Input
+                                            id="repo-url"
+                                            type="url"
+                                            value={repoUrl}
+                                            onChange={(e) => setRepoUrl(e.target.value)}
+                                            placeholder="https://github.com/owner/repo"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="branch" className="flex items-center gap-2">
+                                            <GitBranch className="w-3 h-3" />
+                                            Branch
+                                        </Label>
+                                        <Input
+                                            id="branch"
+                                            value={branch}
+                                            onChange={(e) => setBranch(e.target.value)}
+                                            placeholder="main"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <Button
+                                    onClick={handleStartTask}
+                                    disabled={isLoading || (currentTask?.status === "running")}
+                                    size="lg"
+                                    className="gap-2"
+                                >
+                                    <Code2 className="w-4 h-4" />
+                                    {isLoading && 'Starting...'}
+                                    {!isLoading && 'Start Coding'}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Current Task Status */}
+                    {currentTask && (
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-start justify-between">
+                                    <div className="space-y-1">
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Badge variant={getStatusVariant(currentTask.status)} className="gap-1">
+                                                {getStatusIcon(currentTask.status)}
+                                                {currentTask.status}
+                                            </Badge>
+                                            Task Status
+                                        </CardTitle>
+                                        <CardDescription>
+                                            {new Date(currentTask.created_at).toLocaleString()} • {currentTask.repo_url}
+                                        </CardDescription>
+                                    </div>
+                                    {currentTask.status === "completed" && (
+                                        <Button
+                                            onClick={handleCreatePR}
+                                            variant="default"
+                                            className="gap-2"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            Create PR
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <Label className="text-sm font-medium">Prompt</Label>
+                                    <p className="text-sm text-slate-700 mt-1 p-3 bg-slate-50 rounded-md">
+                                        {currentTask.prompt}
+                                    </p>
+                                </div>
+
+                                {currentTask.error && (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                                        <div className="flex items-center gap-2 text-red-800">
+                                            <XCircle className="w-4 h-4" />
+                                            <span className="font-medium">Error</span>
+                                        </div>
+                                        <p className="text-sm text-red-700 mt-1">
+                                            {currentTask.error}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Git Diff Display */}
+                                {gitDiff && (
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-medium flex items-center gap-2">
+                                            <CheckCircle className="w-4 h-4 text-green-600" />
+                                            Changes Made
+                                        </Label>
+                                        <div className="bg-slate-900 rounded-lg overflow-hidden">
+                                            <pre className="text-sm text-slate-100 p-4 overflow-x-auto max-h-96 overflow-y-auto">
+                                                {gitDiff}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Instructions */}
+                    {!currentTask && (
+                        <Card className="bg-slate-50 border-slate-200">
+                            <CardContent className="text-center py-8">
+                                <Code2 className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-slate-900 mb-2">
+                                    Ready to Start Coding
+                                </h3>
+                                <p className="text-slate-600 max-w-md mx-auto">
+                                    Enter a detailed prompt describing what you want to build. Claude will analyze your repository 
+                                    and implement the necessary changes automatically.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             </main>
         </div>
     );
