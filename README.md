@@ -1,21 +1,24 @@
 # Claude Code Automation MVP
 
-An MVP application that automates coding tasks using Claude Code in sandboxed environments. Users can submit text prompts describing what they want to develop for a configured GitHub repository, and Claude Code will analyze the codebase, make the necessary changes, and create commits that can be turned into pull requests.
+An MVP application that automates coding tasks using Claude Code or Codex CLI in sandboxed environments. Users can submit text prompts describing what they want to develop for a configured GitHub repository, and the selected AI model will analyze the codebase, make the necessary changes, and create commits that can be turned into pull requests.
 
 ## Features
 
-- 🤖 **Claude Code Integration**: Leverages Claude Code for intelligent code generation and modification
-- 🐳 **Sandboxed Execution**: Runs Claude Code in isolated Docker containers for security
+- 🤖 **Multiple AI Models**: Choose between Claude Code and Codex CLI for code generation
+- 🐳 **Sandboxed Execution**: Runs AI models in isolated Docker containers for security
 - 🔄 **Git Integration**: Automatically clones repositories, makes commits, and creates pull requests
 - 🌐 **Web Interface**: Clean, modern UI for submitting prompts and reviewing changes
 - 📊 **Real-time Status**: Live updates on task progress and completion
 - 🔍 **Git Diff Viewer**: Review all changes before creating pull requests
+- 🎯 **Model Comparison**: Easily compare outputs from different AI models
 
 ## Architecture
 
 - **Frontend**: Next.js with TypeScript and TailwindCSS
 - **Backend**: Python Flask API with Docker orchestration
-- **Automation**: Claude Code running in isolated Alpine Linux containers
+- **AI Models**: 
+  - Claude Code (Anthropic) - Advanced coding model
+  - Codex CLI (OpenAI) - Lightweight coding agent
 - **Git Operations**: GitHub API integration for repository management
 
 ## Prerequisites
@@ -50,10 +53,11 @@ An MVP application that automates coding tasks using Claude Code in sandboxed en
 
 1. **Setup GitHub Token**: Click "Setup GitHub Token" in the frontend and enter your token
 2. **Configure Repository**: Enter the GitHub repository URL and branch
-3. **Enter Prompt**: Describe what you want Claude Code to develop
-4. **Start Task**: Click "Code" to begin the automation process
-5. **Review Changes**: View the git diff when the task completes
-6. **Create PR**: If satisfied with changes, click "Create PR"
+3. **Select AI Model**: Choose between Claude Code or Codex CLI
+4. **Enter Prompt**: Describe what you want the AI to develop
+5. **Start Task**: Click "Code" to begin the automation process
+6. **Review Changes**: View the git diff when the task completes
+7. **Create PR**: If satisfied with changes, click "Create PR"
 
 ## Example Prompts
 
@@ -74,8 +78,8 @@ FLASK_DEBUG=True
 
 ## API Endpoints
 
-- `POST /start-task` - Start a new Claude Code automation task
-- `GET /task-status/<task_id>` - Get task status and progress
+- `POST /start-task` - Start a new automation task (supports `model` parameter: "claude" or "codex")
+- `GET /task-status/<task_id>` - Get task status and progress (includes model used)
 - `GET /git-diff/<task_id>` - Retrieve git diff for completed tasks
 - `POST /create-pr/<task_id>` - Create a pull request from completed task
 
