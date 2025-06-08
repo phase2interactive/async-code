@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { ApiService } from "@/lib/api-service";
 import { Task, Project, ChatMessage } from "@/types";
 import { formatDiff, parseDiffStats } from "@/lib/utils";
+import { DiffViewer } from "@/components/diff-viewer";
 
 interface TaskWithProject extends Task {
     project?: Project
@@ -121,7 +122,7 @@ export default function TaskDetailPage() {
         if (!task || task.status !== "completed" || !user?.id) return;
 
         try {
-            const prompt = task.chat_messages?.[0]?.content || '';
+            const prompt = (task.chat_messages as unknown as ChatMessage[])?.[0]?.content || '';
             const modelName = task.agent === 'codex' ? 'Codex' : 'Claude Code';
             
             const response = await ApiService.createPullRequest(user.id, task.id, {
@@ -225,7 +226,7 @@ export default function TaskDetailPage() {
                 </header>
 
                 {/* Main Content */}
-                <main className="container mx-auto px-6 py-8 max-w-6xl">
+                <main className="container mx-auto px-6 py-8 max-w-8xl">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Left Column - Task Details */}
                         <div className="lg:col-span-2 space-y-6">
@@ -324,47 +325,20 @@ export default function TaskDetailPage() {
                             {gitDiff && (
                                 <Card>
                                     <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <CardTitle className="flex items-center gap-2">
-                                                    <CheckCircle className="w-5 h-5 text-green-600" />
-                                                    Code Changes
-                                                </CardTitle>
-                                                <CardDescription>
-                                                    Review the changes made by AI
-                                                </CardDescription>
-                                            </div>
-                                            <div className="flex items-center gap-4 text-sm">
-                                                <div className="flex items-center gap-1">
-                                                    <FileText className="w-3 h-3 text-slate-500" />
-                                                    <span className="text-slate-600">{diffStats.files} files</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-green-600">+{diffStats.additions}</span>
-                                                    <span className="text-red-600">-{diffStats.deletions}</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <CheckCircle className="w-5 h-5 text-green-600" />
+                                            Code Changes
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Review the changes made by AI
+                                        </CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="bg-slate-900 rounded-lg overflow-hidden border">
-                                            <div className="bg-slate-800 px-4 py-2 flex items-center justify-between">
-                                                <span className="text-slate-200 text-sm font-medium">Git Diff</span>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => navigator.clipboard.writeText(gitDiff)}
-                                                    className="text-slate-300 hover:text-white"
-                                                >
-                                                    <Copy className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                            <div className="max-h-96 overflow-y-auto p-4">
-                                                <pre className="text-sm text-slate-100 whitespace-pre-wrap">
-                                                    {formatDiff(gitDiff)}
-                                                </pre>
-                                            </div>
-                                        </div>
+                                        <DiffViewer 
+                                            diff={gitDiff} 
+                                            fileChanges={(task.execution_metadata as any)?.file_changes}
+                                            stats={diffStats}
+                                        />
                                     </CardContent>
                                 </Card>
                             )}
@@ -385,7 +359,7 @@ export default function TaskDetailPage() {
                                 <CardContent className="space-y-4">
                                     {/* Chat Messages */}
                                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                                        {task.chat_messages?.map((message, index) => (
+                                        {(task.chat_messages as unknown as ChatMessage[])?.map((message, index) => (
                                             <div 
                                                 key={index}
                                                 className={`p-3 rounded-lg ${

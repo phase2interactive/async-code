@@ -397,6 +397,10 @@ if git diff --quiet; then
     echo "No files were changed"
     echo "=== CHANGED FILES END ==="
     
+    echo "=== FILE CHANGES START ==="
+    echo "No file changes to display"
+    echo "=== FILE CHANGES END ==="
+    
     # Set empty commit hash
     echo "COMMIT_HASH="
 else
@@ -424,6 +428,20 @@ else
     echo "=== CHANGED FILES START ==="
     git diff --name-only HEAD~1 HEAD
     echo "=== CHANGED FILES END ==="
+
+    # Get before/after content for merge view
+    echo "=== FILE CHANGES START ==="
+    for file in $(git diff --name-only HEAD~1 HEAD); do
+        echo "FILE: $file"
+        echo "=== BEFORE START ==="
+        git show HEAD~1:"$file" 2>/dev/null || echo "FILE_NOT_EXISTS"
+        echo "=== BEFORE END ==="
+        echo "=== AFTER START ==="
+        cat "$file" 2>/dev/null || echo "FILE_DELETED"
+        echo "=== AFTER END ==="
+        echo "=== FILE END ==="
+    done
+    echo "=== FILE CHANGES END ==="
 fi
 
 # Explicitly exit with success code
@@ -578,9 +596,16 @@ exit 0
             git_diff = []
             git_patch = []
             changed_files = []
+            file_changes = []
             capturing_diff = False
             capturing_patch = False
             capturing_files = False
+            capturing_file_changes = False
+            capturing_before = False
+            capturing_after = False
+            current_file = None
+            current_before = []
+            current_after = []
             
             for line in lines:
                 if line.startswith('COMMIT_HASH='):
@@ -604,6 +629,51 @@ exit 0
                 elif line == '=== CHANGED FILES END ===':
                     capturing_files = False
                     logger.info(f"📁 Finished capturing changed files ({len(changed_files)} files)")
+                elif line == '=== FILE CHANGES START ===':
+                    capturing_file_changes = True
+                    logger.info(f"🔄 Starting to capture file changes...")
+                elif line == '=== FILE CHANGES END ===':
+                    capturing_file_changes = False
+                    # Add the last file if we were processing one
+                    if current_file:
+                        file_changes.append({
+                            'filename': current_file,
+                            'before': '\n'.join(current_before),
+                            'after': '\n'.join(current_after)
+                        })
+                    logger.info(f"🔄 Finished capturing file changes ({len(file_changes)} files)")
+                elif capturing_file_changes:
+                    if line.startswith('FILE: '):
+                        # Save previous file data if exists
+                        if current_file:
+                            file_changes.append({
+                                'filename': current_file,
+                                'before': '\n'.join(current_before),
+                                'after': '\n'.join(current_after)
+                            })
+                        # Start new file
+                        current_file = line.split('FILE: ', 1)[1]
+                        current_before = []
+                        current_after = []
+                        capturing_before = False
+                        capturing_after = False
+                    elif line == '=== BEFORE START ===':
+                        capturing_before = True
+                        capturing_after = False
+                    elif line == '=== BEFORE END ===':
+                        capturing_before = False
+                    elif line == '=== AFTER START ===':
+                        capturing_after = True
+                        capturing_before = False
+                    elif line == '=== AFTER END ===':
+                        capturing_after = False
+                    elif line == '=== FILE END ===':
+                        # File processing complete
+                        pass
+                    elif capturing_before:
+                        current_before.append(line)
+                    elif capturing_after:
+                        current_after.append(line)
                 elif capturing_patch:
                     git_patch.append(line)
                 elif capturing_diff:
@@ -620,7 +690,11 @@ exit 0
                 'commit_hash': commit_hash,
                 'git_diff': '\n'.join(git_diff),
                 'git_patch': '\n'.join(git_patch),
-                'changed_files': changed_files
+                'changed_files': changed_files,
+                'execution_metadata': {
+                    'file_changes': file_changes,
+                    'completed_at': datetime.now().isoformat()
+                }
             })
             
             logger.info(f"🎉 {model_name} Task {task_id} completed successfully! Commit: {commit_hash[:8] if commit_hash else 'N/A'}, Diff lines: {len(git_diff)}")

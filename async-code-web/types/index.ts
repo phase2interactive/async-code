@@ -12,9 +12,17 @@ export interface ChatMessage {
     timestamp: string
 }
 
+// File change interface for merge view
+export interface FileChange {
+    filename: string
+    before: string
+    after: string
+}
+
 // Frontend-specific interfaces
 export interface TaskWithProject extends Task {
     project?: Project
+    file_changes?: FileChange[]
 }
 
 export interface ProjectWithStats extends Project {

@@ -120,3 +120,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+.cm-editor.cm-merge-b .cm-deletedChunk {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+.cm-editor.cm-merge-b .cm-deletedText {
+  background-color: rgba(255, 0, 0, 0.2);
+}
+
+.cm-editor.cm-merge-b .cm-changedLine {
+  background-color: rgba(0, 255, 0, 0.1);
+}
+
+.cm-editor.cm-merge-b {
+  background-color: transparent !important;
+}

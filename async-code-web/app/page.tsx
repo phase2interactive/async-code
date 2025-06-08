@@ -12,11 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ProtectedRoute } from "@/components/protected-route";
+import { TaskStatusBadge } from "@/components/task-status-badge";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiService } from "@/lib/api-service";
+import { SupabaseService } from "@/lib/supabase-service";
 import { Project, Task } from "@/types";
+import { ClaudeIcon } from "@/components/icon/claude";
+import { OpenAIIcon } from "@/components/icon/openai";
 
 interface TaskWithProject extends Task {
     project?: Project
@@ -74,12 +79,12 @@ export default function Home() {
         const interval = setInterval(async () => {
             try {
                 const updatedTasks = await Promise.all(
-                    runningTasks.map(task => ApiService.getTaskStatus(user.id, task.id))
+                    runningTasks.map(task => SupabaseService.getTask(task.id))
                 );
 
                 setTasks(prevTasks => 
                     prevTasks.map(task => {
-                        const updated = updatedTasks.find(t => t.id === task.id);
+                        const updated = updatedTasks.find(t => t && t.id === task.id);
                         if (updated) {
                             // Check for status changes to show notifications
                             if (task.status !== updated.status) {
@@ -121,7 +126,7 @@ export default function Home() {
         if (!user?.id) return;
         
         try {
-            const taskData = await ApiService.getTasks(user.id);
+            const taskData = await SupabaseService.getTasks();
             setTasks(taskData);
         } catch (error) {
             console.error('Error loading tasks:', error);
@@ -217,6 +222,14 @@ export default function Home() {
         }
     };
 
+    const getAgentIcon = (agent: string) => {
+        switch (agent) {
+            case "claude": return <ClaudeIcon className="w-3 h-3" />;
+            case "codex": return <OpenAIIcon className="w-3 h-3" />;
+            default: return null;
+        }
+    };
+
     return (
         <ProtectedRoute>
             <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -245,8 +258,8 @@ export default function Home() {
                                 <Code2 className="w-4 h-4 text-white" />
                             </div>
                             <div>
-                                <h1 className="text-xl font-semibold text-slate-900">AI Code Automation</h1>
-                                <p className="text-sm text-slate-500">Claude Code & Codex CLI Integration</p>
+                                <h1 className="text-xl font-semibold text-slate-900">Async Code</h1>
+                                <p className="text-sm text-slate-500">Manage parallel AI code agents (Codex & Claude)</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -266,10 +279,14 @@ export default function Home() {
                             
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="gap-2">
-                                        <User className="w-4 h-4" />
-                                        {user?.email?.split('@')[0] || 'User'}
-                                    </Button>
+                                    <Avatar className="cursor-pointer">
+                                        <AvatarFallback>
+                                            {user?.email ? 
+                                                user.email.split('@')[0].slice(0, 2).toUpperCase() : 
+                                                'U'
+                                            }
+                                        </AvatarFallback>
+                                    </Avatar>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-56">
                                     <div className="p-2">
@@ -289,7 +306,7 @@ export default function Home() {
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto px-6 py-8 max-w-6xl">
+            <main className="container mx-auto px-6 py-8 max-w-8xl">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Left Column - Task Creation */}
                     <div className="lg:col-span-2 space-y-6">
@@ -390,7 +407,7 @@ export default function Home() {
                                         <div className="space-y-2">
                                             <Label htmlFor="model" className="flex items-center gap-2">
                                                 <Code2 className="w-3 h-3" />
-                                                AI Model
+                                                Code Agent
                                             </Label>
                                             <Select value={model} onValueChange={setModel}>
                                                 <SelectTrigger id="model" className="w-full">
@@ -398,15 +415,21 @@ export default function Home() {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="claude">
-                                                        <div className="flex flex-col items-start">
-                                                            <span className="font-medium">Claude Code</span>
-                                                            <span className="text-xs text-slate-500">Anthropic's advanced coding model</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <ClaudeIcon className="w-4 h-4 flex-shrink-0" />
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium">Claude Code</span>
+                                                                <span className="text-xs text-slate-500">• Anthropic's agentic coding tool</span>
+                                                            </div>
                                                         </div>
                                                     </SelectItem>
                                                     <SelectItem value="codex">
-                                                        <div className="flex flex-col items-start">
-                                                            <span className="font-medium">Codex CLI</span>
-                                                            <span className="text-xs text-slate-500">OpenAI's lightweight coding agent</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <OpenAIIcon className="w-4 h-4 flex-shrink-0" />
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium">Codex</span>
+                                                                <span className="text-xs text-slate-500">• OpenAI's lightweight coding agent</span>
+                                                            </div>
                                                         </div>
                                                     </SelectItem>
                                                 </SelectContent>
@@ -415,15 +438,14 @@ export default function Home() {
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end pt-2">
+                                <div className="flex justify-start pt-2">
                                     <Button
                                         onClick={handleStartTask}
                                         disabled={isLoading || !selectedProject || !prompt.trim() || !githubToken.trim()}
-                                        size="lg"
-                                        className="gap-2 min-w-[140px]"
+                                        className="gap-2 rounded-full min-w-[100px]"
                                     >
                                         <Code2 className="w-4 h-4" />
-                                        {isLoading ? 'Starting...' : 'Start Coding'}
+                                        {isLoading ? 'Coding...' : 'Code'}
                                     </Button>
                                 </div>
                             </CardContent>
@@ -477,7 +499,7 @@ export default function Home() {
                                     Track all your automation tasks
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-3">
+                            <CardContent className="space-y-3 max-h-[500px] overflow-y-auto">
                                 {tasks.length === 0 ? (
                                     <div className="text-center py-8 text-slate-500">
                                         <Code2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -489,22 +511,19 @@ export default function Home() {
                                         <div key={task.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <Badge variant={getStatusVariant(task.status || '')} className="gap-1">
-                                                        {getStatusIcon(task.status || '')}
-                                                        {task.status}
-                                                    </Badge>
-                                                    <span className="text-xs text-slate-500">
-                                                        #{task.id} • {task.agent?.toUpperCase()}
+                                                    <TaskStatusBadge status={task.status || ''} />
+                                                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                        #{task.id} • {getAgentIcon(task.agent || '')} {task.agent?.toUpperCase()}
                                                     </span>
                                                 </div>
                                                 <p className="text-sm font-medium text-slate-900 truncate">
-                                                    {(task.chat_messages as any[])?.[0]?.content?.substring(0, 50) || 'No prompt'}...
+                                                    {(task.chat_messages as any[])?.[0]?.content?.substring(0, 50) || ''}...
                                                 </p>
                                                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                                                     {task.project ? (
                                                         <>
                                                             <FolderGit2 className="w-3 h-3" />
-                                                            {task.project.name}
+                                                            {task.project.repo_name}
                                                         </>
                                                     ) : (
                                                         <>
@@ -537,32 +556,6 @@ export default function Home() {
                             </CardContent>
                         </Card>
 
-                        {/* Quick Actions */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg">Quick Actions</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-2">
-                                <Link href="/projects">
-                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
-                                        <FolderGit2 className="w-5 h-5" />
-                                        <span className="font-medium">Manage Projects</span>
-                                    </Button>
-                                </Link>
-                                <Link href="/settings">
-                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
-                                        <Settings className="w-5 h-5" />
-                                        <span className="font-medium">Settings</span>
-                                    </Button>
-                                </Link>
-                                <Link href="/projects">
-                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
-                                        <Plus className="w-5 h-5" />
-                                        <span className="font-medium">New Project</span>
-                                    </Button>
-                                </Link>
-                            </CardContent>
-                        </Card>
                     </div>
                 </div>
             </main>

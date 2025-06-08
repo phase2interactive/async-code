@@ -148,7 +148,8 @@ def list_all_tasks():
                 'has_patch': bool(task.get('git_patch')),
                 'project_id': task.get('project_id'),
                 'repo_url': task.get('repo_url'),
-                'agent': task.get('agent', 'claude')
+                'agent': task.get('agent', 'claude'),
+                'chat_messages': task.get('chat_messages', [])
             }
         
         return jsonify({

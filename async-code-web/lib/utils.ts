@@ -36,7 +36,9 @@ export function parseDiffStats(diff: string): { additions: number; deletions: nu
         if (line.startsWith('+++') || line.startsWith('---')) {
             const filePath = line.substring(4);
             if (filePath !== '/dev/null') {
-                files.add(filePath);
+                // Remove a/ or b/ prefix from git diff format
+                const normalizedPath = filePath.replace(/^[ab]\//, '');
+                files.add(normalizedPath);
             }
         } else if (line.startsWith('+') && !line.startsWith('+++')) {
             additions++;

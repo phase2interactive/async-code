@@ -34,9 +34,13 @@ export class SupabaseService {
         repo_owner: string
         settings?: any
     }): Promise<Project> {
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('No authenticated user')
+
         const { data, error } = await supabase
             .from('projects')
-            .insert([projectData])
+            .insert([{ ...projectData, user_id: user.id }])
             .select()
             .single()
 
@@ -81,6 +85,10 @@ export class SupabaseService {
 
     // Task operations
     static async getTasks(projectId?: number): Promise<Task[]> {
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('No authenticated user')
+
         let query = supabase
             .from('tasks')
             .select(`
@@ -92,6 +100,7 @@ export class SupabaseService {
                     repo_owner
                 )
             `)
+            .eq('user_id', user.id)
 
         if (projectId) {
             query = query.eq('project_id', projectId)
@@ -132,11 +141,17 @@ export class SupabaseService {
         agent?: string
         chat_messages?: ChatMessage[]
     }): Promise<Task> {
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('No authenticated user')
+
         const { data, error } = await supabase
             .from('tasks')
             .insert([{
                 ...taskData,
-                status: 'pending'
+                status: 'pending',
+                user_id: user.id,
+                chat_messages: taskData.chat_messages as any
             }])
             .select()
             .single()
@@ -167,13 +182,13 @@ export class SupabaseService {
 
         if (fetchError) throw fetchError
 
-        const existingMessages = (task.chat_messages as ChatMessage[]) || []
+        const existingMessages = (task.chat_messages as unknown as ChatMessage[]) || []
         const updatedMessages = [...existingMessages, message]
 
         const { data, error } = await supabase
             .from('tasks')
             .update({ 
-                chat_messages: updatedMessages,
+                chat_messages: updatedMessages as any,
                 updated_at: new Date().toISOString()
             })
             .eq('id', taskId)

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProtectedRoute } from "@/components/protected-route";
+import { TaskStatusBadge } from "@/components/task-status-badge";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiService } from "@/lib/api-service";
 import { Task, Project } from "@/types";
@@ -372,10 +373,7 @@ export default function TasksPage() {
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 mb-3">
-                                                    <Badge variant={getStatusVariant(task.status || '')} className="gap-1">
-                                                        {getStatusIcon(task.status || '')}
-                                                        {task.status}
-                                                    </Badge>
+                                                    <TaskStatusBadge status={task.status || ''} />
                                                     <span className="text-sm text-slate-500">
                                                         Task #{task.id}
                                                     </span>
@@ -388,7 +386,7 @@ export default function TasksPage() {
                                                             <span className="text-sm text-slate-500">•</span>
                                                             <div className="flex items-center gap-1 text-sm text-slate-500">
                                                                 <FolderGit2 className="w-3 h-3" />
-                                                                {task.project.name}
+                                                                {task.project.repo_owner}/{task.project.repo_name}
                                                             </div>
                                                         </>
                                                     )}
