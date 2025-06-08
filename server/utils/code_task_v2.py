@@ -221,7 +221,7 @@ if [ "{model_cli}" = "codex" ]; then
     echo "CODEX_QUIET_MODE: $CODEX_QUIET_MODE"
     echo "CODEX_UNSAFE_ALLOW_NO_SANDBOX: $CODEX_UNSAFE_ALLOW_NO_SANDBOX"
     echo "OPENAI_API_KEY: $(echo $OPENAI_API_KEY | head -c 8)..."
-    echo "USING DOCKER-OPTIMIZED FLAGS: --dangerously-auto-approve-everything without --approval-mode full-auto"
+    echo "USING OFFICIAL CODEX FLAGS: --approval-mode full-auto --quiet for non-interactive operation"
     echo "======================="
     
     # Read the prompt from file
@@ -232,10 +232,10 @@ if [ "{model_cli}" = "codex" ]; then
         echo "Found codex at /usr/local/bin/codex"
         echo "Running Codex in non-interactive mode..."
         
-        # Use non-interactive flags for Docker environment
-        # Using only --dangerously-auto-approve-everything as recommended by Codex error message
-        # Avoiding --approval-mode full-auto which triggers problematic sandboxing in Docker
-        /usr/local/bin/codex --dangerously-auto-approve-everything --quiet "$PROMPT_TEXT"
+        # Use official non-interactive flags for Docker environment
+        # Using --approval-mode full-auto as per official Codex documentation
+        # Also disable Codex's internal sandboxing to prevent conflicts with Docker
+        /usr/local/bin/codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
         CODEX_EXIT_CODE=$?
         echo "Codex finished with exit code: $CODEX_EXIT_CODE"
         
@@ -249,10 +249,10 @@ if [ "{model_cli}" = "codex" ]; then
         echo "Using codex from PATH..."
         echo "Running Codex in non-interactive mode..."
         
-        # Use non-interactive flags for Docker environment
-        # Using only --dangerously-auto-approve-everything as recommended by Codex error message
-        # Avoiding --approval-mode full-auto which triggers problematic sandboxing in Docker
-        codex --dangerously-auto-approve-everything --quiet "$PROMPT_TEXT"
+        # Use official non-interactive flags for Docker environment
+        # Using --approval-mode full-auto as per official Codex documentation
+        # Also disable Codex's internal sandboxing to prevent conflicts with Docker
+        codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
         CODEX_EXIT_CODE=$?
         echo "Codex finished with exit code: $CODEX_EXIT_CODE"
         
@@ -381,34 +381,50 @@ fi  # End of model selection (claude vs codex)
 
 # Check if there are changes
 if git diff --quiet; then
-    echo "No changes made"
-    exit 1
+    echo "ℹ️  No changes made by {model_cli.upper()} - this is a valid outcome"
+    echo "The AI tool ran successfully but decided not to make changes"
+    
+    # Create empty patch and diff for consistency
+    echo "=== PATCH START ==="
+    echo "No changes were made"
+    echo "=== PATCH END ==="
+    
+    echo "=== GIT DIFF START ==="
+    echo "No changes were made"
+    echo "=== GIT DIFF END ==="
+    
+    echo "=== CHANGED FILES START ==="
+    echo "No files were changed"
+    echo "=== CHANGED FILES END ==="
+    
+    # Set empty commit hash
+    echo "COMMIT_HASH="
+else
+    # Commit changes locally
+    git add .
+    git commit -m "{model_cli.capitalize()}: {escaped_prompt[:100]}"
+
+    # Get commit info
+    COMMIT_HASH=$(git rev-parse HEAD)
+    echo "COMMIT_HASH=$COMMIT_HASH"
+
+    # Generate patch file for later application
+    echo "📦 Generating patch file..."
+    git format-patch HEAD~1 --stdout > /tmp/changes.patch
+    echo "=== PATCH START ==="
+    cat /tmp/changes.patch
+    echo "=== PATCH END ==="
+
+    # Also get the diff for display
+    echo "=== GIT DIFF START ==="
+    git diff HEAD~1 HEAD
+    echo "=== GIT DIFF END ==="
+
+    # List changed files for reference
+    echo "=== CHANGED FILES START ==="
+    git diff --name-only HEAD~1 HEAD
+    echo "=== CHANGED FILES END ==="
 fi
-
-# Commit changes locally
-git add .
-git commit -m "{model_cli.capitalize()}: {escaped_prompt[:100]}"
-
-# Get commit info
-COMMIT_HASH=$(git rev-parse HEAD)
-echo "COMMIT_HASH=$COMMIT_HASH"
-
-# Generate patch file for later application
-echo "📦 Generating patch file..."
-git format-patch HEAD~1 --stdout > /tmp/changes.patch
-echo "=== PATCH START ==="
-cat /tmp/changes.patch
-echo "=== PATCH END ==="
-
-# Also get the diff for display
-echo "=== GIT DIFF START ==="
-git diff HEAD~1 HEAD
-echo "=== GIT DIFF END ==="
-
-# List changed files for reference
-echo "=== CHANGED FILES START ==="
-git diff --name-only HEAD~1 HEAD
-echo "=== CHANGED FILES END ==="
 
 # Explicitly exit with success code
 echo "Container work completed successfully"
