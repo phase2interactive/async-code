@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { formatDiff, parseDiffStats } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiService } from "@/lib/api-service";
@@ -30,14 +29,11 @@ export default function Home() {
     const [branch, setBranch] = useState("main");
     const [githubToken, setGithubToken] = useState("");
     const [model, setModel] = useState("claude");
-    const [currentTask, setCurrentTask] = useState<TaskWithProject | null>(null);
     const [tasks, setTasks] = useState<TaskWithProject[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
-    const [gitDiff, setGitDiff] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
     const [notificationMessage, setNotificationMessage] = useState("");
-    const [diffStats, setDiffStats] = useState({ additions: 0, deletions: 0, files: 0 });
 
     // Initialize GitHub token from localStorage
     useEffect(() => {
@@ -88,11 +84,11 @@ export default function Home() {
                             // Check for status changes to show notifications
                             if (task.status !== updated.status) {
                                 if (updated.status === "completed") {
-                                    setNotificationMessage("🎉 Claude Code has finished making changes to your repository!");
+                                    setNotificationMessage(`🎉 Task #${task.id} completed successfully!`);
                                     setShowNotification(true);
                                     setTimeout(() => setShowNotification(false), 5000);
                                 } else if (updated.status === "failed") {
-                                    setNotificationMessage("❌ Task failed. Please check the error details.");
+                                    setNotificationMessage(`❌ Task #${task.id} failed. Check details for more info.`);
                                     setShowNotification(true);
                                     setTimeout(() => setShowNotification(false), 5000);
                                 }
@@ -102,33 +98,13 @@ export default function Home() {
                         return task;
                     })
                 );
-
-                // Update current task if it's being tracked
-                if (currentTask) {
-                    const updatedCurrentTask = updatedTasks.find(t => t.id === currentTask.id);
-                    if (updatedCurrentTask) {
-                        setCurrentTask(prev => ({ ...prev, ...updatedCurrentTask }));
-                        
-                        // Fetch git diff if task completed
-                        if (updatedCurrentTask.status === "completed" && !gitDiff) {
-                            try {
-                                const diff = await ApiService.getGitDiff(user.id, updatedCurrentTask.id);
-                                setGitDiff(diff);
-                                const stats = parseDiffStats(diff);
-                                setDiffStats(stats);
-                            } catch (error) {
-                                console.error('Error fetching git diff:', error);
-                            }
-                        }
-                    }
-                }
             } catch (error) {
                 console.error('Error polling task status:', error);
             }
         }, 2000);
 
         return () => clearInterval(interval);
-    }, [tasks, currentTask, user?.id, gitDiff]);
+    }, [tasks, user?.id]);
 
     const loadProjects = async () => {
         if (!user?.id) return;
@@ -207,33 +183,17 @@ export default function Home() {
                 project: projects.find(p => p.id === projectId)
             } as unknown as TaskWithProject;
 
-            setCurrentTask(newTask);
             setTasks(prev => [newTask, ...prev]);
-            setGitDiff("");
             setPrompt("");
+            
+            // Show success notification
+            setNotificationMessage(`🚀 Task #${response.task_id} started successfully!`);
+            setShowNotification(true);
+            setTimeout(() => setShowNotification(false), 5000);
         } catch (error) {
             alert(`Error starting task: ${error}`);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleCreatePR = async () => {
-        if (!currentTask || currentTask.status !== "completed" || !user?.id) return;
-        try {
-            const prompt = (currentTask.chat_messages as any[])?.[0]?.content || '';
-            const modelName = currentTask.agent === 'codex' ? 'Codex' : 'Claude Code';
-            
-            const response = await ApiService.createPullRequest(user.id, currentTask.id, {
-                title: `${modelName}: ${prompt.substring(0, 50)}...`,
-                body: `Automated changes generated by ${modelName}.\n\nPrompt: ${prompt}`,
-                github_token: githubToken
-            });
-
-            alert(`Pull request created successfully! #${response.pr_number}`);
-            window.open(response.pr_url, '_blank');
-        } catch (error) {
-            alert(`Error creating PR: ${error}`);
         }
     };
 
@@ -469,129 +429,35 @@ export default function Home() {
                             </CardContent>
                         </Card>
 
-                        {/* Current Task Status */}
-                        {currentTask && (
+                        {/* Running Tasks Summary */}
+                        {tasks.filter(task => task.status === "running" || task.status === "pending").length > 0 && (
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-start justify-between">
-                                        <div className="space-y-1">
-                                            <CardTitle className="flex items-center gap-2">
-                                                <Badge variant={getStatusVariant(currentTask.status || '')} className="gap-1">
-                                                    {getStatusIcon(currentTask.status || '')}
-                                                    {currentTask.status}
-                                                </Badge>
-                                                Task Status {currentTask.agent && `(${currentTask.agent.toUpperCase()})`}
-                                            </CardTitle>
-                                            <CardDescription>
-                                                {new Date(currentTask.created_at || '').toLocaleString()} • {currentTask.project?.name || 'Custom Repository'}
-                                            </CardDescription>
-                                        </div>
-                                        {currentTask.status === "completed" && (
-                                            <div className="flex gap-2">
-                                                <Button variant="outline" asChild>
-                                                    <Link href={`/tasks/${currentTask.id}`}>
-                                                        <Eye className="w-4 h-4 mr-1" />
-                                                        View Details
-                                                    </Link>
-                                                </Button>
-                                                <Button onClick={handleCreatePR} className="gap-2">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                    Create PR
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <AlertCircle className="w-5 h-5 text-blue-600" />
+                                        Active Tasks
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {tasks.filter(task => task.status === "running" || task.status === "pending").length} tasks currently running
+                                    </CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div>
-                                        <Label className="text-sm font-medium">Prompt</Label>
-                                        <p className="text-sm text-slate-700 mt-1 p-3 bg-slate-50 rounded-md">
-                                            {(currentTask.chat_messages as any[])?.[0]?.content || 'No prompt available'}
-                                        </p>
+                                <CardContent>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="animate-spin">
+                                                <AlertCircle className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-blue-900">AI agents are working on your code...</div>
+                                                <div className="text-sm text-blue-700 mt-1">
+                                                    You can start additional tasks or check individual task progress in the task list.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 bg-blue-100 rounded-full h-2">
+                                            <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                                        </div>
                                     </div>
-
-                                    {/* Running Status Indicator */}
-                                    {currentTask.status === "running" && (
-                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="animate-spin">
-                                                    <AlertCircle className="w-5 h-5 text-blue-600" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-blue-900">AI is working on your code...</div>
-                                                    <div className="text-sm text-blue-700 mt-1">
-                                                        Analyzing repository, making changes, and preparing commit. This may take a few minutes.
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 bg-blue-100 rounded-full h-2">
-                                                <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {currentTask.error && (
-                                        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                                            <div className="flex items-center gap-2 text-red-800">
-                                                <XCircle className="w-4 h-4" />
-                                                <span className="font-medium">Error</span>
-                                            </div>
-                                            <p className="text-sm text-red-700 mt-1">
-                                                {currentTask.error}
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Git Diff Display */}
-                                    {gitDiff && (
-                                        <div className="space-y-4">
-                                            <div className="flex items-center justify-between">
-                                                <Label className="text-sm font-medium flex items-center gap-2">
-                                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                                    Code Review
-                                                </Label>
-                                                <div className="flex items-center gap-4 text-sm">
-                                                    <div className="flex items-center gap-1">
-                                                        <FileText className="w-3 h-3 text-slate-500" />
-                                                        <span className="text-slate-600">{diffStats.files} files</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-green-600">+{diffStats.additions}</span>
-                                                        <span className="text-red-600">-{diffStats.deletions}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Diff Statistics Summary */}
-                                            <div className="bg-slate-50 rounded-lg p-4 border">
-                                                <div className="flex items-center gap-6 text-sm">
-                                                    <div className="flex items-center gap-2">
-                                                        <GitCommit className="w-4 h-4 text-slate-500" />
-                                                        <span className="font-medium">Commit:</span>
-                                                        <code className="bg-slate-200 px-2 py-1 rounded text-xs">
-                                                            {currentTask.commit_hash?.substring(0, 8)}
-                                                        </code>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Eye className="w-4 h-4 text-slate-500" />
-                                                        <span>Ready for review</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Enhanced Diff Display */}
-                                            <div className="bg-slate-900 rounded-lg overflow-hidden border">
-                                                <div className="bg-slate-800 px-4 py-2 text-sm text-slate-200 font-medium">
-                                                    Git Diff
-                                                </div>
-                                                <div className="p-4 overflow-x-auto">
-                                                    <pre className="text-sm text-slate-100 whitespace-pre-wrap">
-                                                        {formatDiff(gitDiff)}
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </CardContent>
                             </Card>
                         )}
@@ -602,13 +468,13 @@ export default function Home() {
                         <Card>
                             <CardHeader>
                                 <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg">Recent Tasks</CardTitle>
+                                    <CardTitle className="text-lg">All Tasks</CardTitle>
                                     <Link href="/tasks">
                                         <Button variant="outline" size="sm">View All</Button>
                                     </Link>
                                 </div>
                                 <CardDescription>
-                                    Latest automation tasks across all projects
+                                    Track all your automation tasks
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
@@ -620,18 +486,18 @@ export default function Home() {
                                     </div>
                                 ) : (
                                     tasks.slice(0, 10).map((task) => (
-                                        <div key={task.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                        <div key={task.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 mb-1">
                                                     <Badge variant={getStatusVariant(task.status || '')} className="gap-1">
                                                         {getStatusIcon(task.status || '')}
                                                         {task.status}
                                                     </Badge>
                                                     <span className="text-xs text-slate-500">
-                                                        {task.agent?.toUpperCase()}
+                                                        #{task.id} • {task.agent?.toUpperCase()}
                                                     </span>
                                                 </div>
-                                                <p className="text-sm font-medium text-slate-900 truncate mt-1">
+                                                <p className="text-sm font-medium text-slate-900 truncate">
                                                     {(task.chat_messages as any[])?.[0]?.content?.substring(0, 50) || 'No prompt'}...
                                                 </p>
                                                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
@@ -650,11 +516,21 @@ export default function Home() {
                                                     <span>{new Date(task.created_at || '').toLocaleDateString()}</span>
                                                 </div>
                                             </div>
-                                            <Link href={`/tasks/${task.id}`}>
-                                                <Button variant="ghost" size="sm">
-                                                    <Eye className="w-3 h-3" />
-                                                </Button>
-                                            </Link>
+                                            <div className="flex items-center gap-2">
+                                                {task.status === "completed" && (
+                                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                                )}
+                                                {task.status === "running" && (
+                                                    <div className="animate-spin">
+                                                        <AlertCircle className="w-4 h-4 text-blue-600" />
+                                                    </div>
+                                                )}
+                                                <Link href={`/tasks/${task.id}`}>
+                                                    <Button variant="ghost" size="sm">
+                                                        <Eye className="w-3 h-3" />
+                                                    </Button>
+                                                </Link>
+                                            </div>
                                         </div>
                                     ))
                                 )}
