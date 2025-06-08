@@ -190,7 +190,7 @@ export default function Home() {
             });
 
             // Create a new task object for immediate display
-            const newTask: TaskWithProject = {
+            const newTask = {
                 id: response.task_id,
                 status: "pending",
                 repo_url: repoUrl,
@@ -203,9 +203,9 @@ export default function Home() {
                 }],
                 created_at: new Date().toISOString(),
                 user_id: user.id,
-                project_id: projectId,
+                project_id: projectId || null,
                 project: projects.find(p => p.id === projectId)
-            };
+            } as unknown as TaskWithProject;
 
             setCurrentTask(newTask);
             setTasks(prev => [newTask, ...prev]);
@@ -220,9 +220,8 @@ export default function Home() {
 
     const handleCreatePR = async () => {
         if (!currentTask || currentTask.status !== "completed" || !user?.id) return;
-
         try {
-            const prompt = currentTask.chat_messages?.[0]?.content || '';
+            const prompt = (currentTask.chat_messages as any[])?.[0]?.content || '';
             const modelName = currentTask.agent === 'codex' ? 'Codex' : 'Claude Code';
             
             const response = await ApiService.createPullRequest(user.id, currentTask.id, {
@@ -334,15 +333,6 @@ export default function Home() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Left Column - Task Creation */}
                     <div className="lg:col-span-2 space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-3xl font-bold text-slate-900 mb-2">
-                                What are we coding next?
-                            </h2>
-                            <p className="text-slate-600">
-                                Describe what you want to build and your selected AI model will analyze your repository and make the necessary changes
-                            </p>
-                        </div>
-
                         {/* Main Input Card */}
                         <Card>
                             <CardHeader>
@@ -385,37 +375,44 @@ export default function Home() {
                                         <Github className="w-4 h-4" />
                                         Repository Settings
                                     </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="project" className="flex items-center gap-2">
-                                                <FolderGit2 className="w-3 h-3" />
-                                                Project
-                                            </Label>
-                                            <Select value={selectedProject} onValueChange={setSelectedProject}>
-                                                <SelectTrigger id="project">
-                                                    <SelectValue placeholder="Select a project" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {projects.map((project) => (
-                                                        <SelectItem key={project.id} value={project.id.toString()}>
-                                                            <div className="flex items-center gap-2">
-                                                                <Github className="w-3 h-3" />
-                                                                {project.name} ({project.repo_owner}/{project.repo_name})
-                                                            </div>
-                                                        </SelectItem>
-                                                    ))}
-                                                    <SelectItem value="custom">Custom Repository URL</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {projects.length === 0 && (
-                                                <p className="text-sm text-slate-500">
-                                                    No projects found.{" "}
-                                                    <Link href="/projects" className="text-blue-600 hover:underline">
-                                                        Create a project first
-                                                    </Link>
-                                                </p>
-                                            )}
-                                        </div>
+                                    
+                                    {/* Project Selection - Full Width */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="project" className="flex items-center gap-2">
+                                            <FolderGit2 className="w-3 h-3" />
+                                            Project
+                                        </Label>
+                                        <Select value={selectedProject} onValueChange={setSelectedProject}>
+                                            <SelectTrigger id="project" className="w-full">
+                                                <SelectValue placeholder="Select a project" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {projects.map((project) => (
+                                                    <SelectItem key={project.id} value={project.id.toString()}>
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <Github className="w-3 h-3 flex-shrink-0" />
+                                                            <span className="truncate">{project.name}</span>
+                                                            <span className="text-slate-500 text-xs flex-shrink-0">
+                                                                ({project.repo_owner}/{project.repo_name})
+                                                            </span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                                <SelectItem value="custom">Custom Repository URL</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        {projects.length === 0 && (
+                                            <p className="text-sm text-slate-500">
+                                                No projects found.{" "}
+                                                <Link href="/projects" className="text-blue-600 hover:underline">
+                                                    Create a project first
+                                                </Link>
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Branch and Model in a responsive grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label htmlFor="branch" className="flex items-center gap-2">
                                                 <GitBranch className="w-3 h-3" />
@@ -426,38 +423,44 @@ export default function Home() {
                                                 value={branch}
                                                 onChange={(e) => setBranch(e.target.value)}
                                                 placeholder="main"
+                                                className="w-full"
                                             />
                                         </div>
-                                    </div>
-                                    
-                                    {/* Model Selection */}
-                                    <div className="space-y-2">
-                                        <Label htmlFor="model" className="flex items-center gap-2">
-                                            <Code2 className="w-3 h-3" />
-                                            AI Model
-                                        </Label>
-                                        <Select value={model} onValueChange={setModel}>
-                                            <SelectTrigger id="model">
-                                                <SelectValue placeholder="Select an AI model" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="claude">
-                                                    Claude Code - Anthropic&apos;s advanced coding model
-                                                </SelectItem>
-                                                <SelectItem value="codex">
-                                                    Codex CLI - OpenAI&apos;s lightweight coding agent
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        
+                                        <div className="space-y-2">
+                                            <Label htmlFor="model" className="flex items-center gap-2">
+                                                <Code2 className="w-3 h-3" />
+                                                AI Model
+                                            </Label>
+                                            <Select value={model} onValueChange={setModel}>
+                                                <SelectTrigger id="model" className="w-full">
+                                                    <SelectValue placeholder="Select an AI model" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="claude">
+                                                        <div className="flex flex-col items-start">
+                                                            <span className="font-medium">Claude Code</span>
+                                                            <span className="text-xs text-slate-500">Anthropic's advanced coding model</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                    <SelectItem value="codex">
+                                                        <div className="flex flex-col items-start">
+                                                            <span className="font-medium">Codex CLI</span>
+                                                            <span className="text-xs text-slate-500">OpenAI's lightweight coding agent</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end">
+                                <div className="flex justify-end pt-2">
                                     <Button
                                         onClick={handleStartTask}
                                         disabled={isLoading || !selectedProject || !prompt.trim() || !githubToken.trim()}
                                         size="lg"
-                                        className="gap-2"
+                                        className="gap-2 min-w-[140px]"
                                     >
                                         <Code2 className="w-4 h-4" />
                                         {isLoading ? 'Starting...' : 'Start Coding'}
@@ -503,7 +506,7 @@ export default function Home() {
                                     <div>
                                         <Label className="text-sm font-medium">Prompt</Label>
                                         <p className="text-sm text-slate-700 mt-1 p-3 bg-slate-50 rounded-md">
-                                            {currentTask.chat_messages?.[0]?.content || 'No prompt available'}
+                                            {(currentTask.chat_messages as any[])?.[0]?.content || 'No prompt available'}
                                         </p>
                                     </div>
 
@@ -629,7 +632,7 @@ export default function Home() {
                                                     </span>
                                                 </div>
                                                 <p className="text-sm font-medium text-slate-900 truncate mt-1">
-                                                    {task.chat_messages?.[0]?.content?.substring(0, 50) || 'No prompt'}...
+                                                    {(task.chat_messages as any[])?.[0]?.content?.substring(0, 50) || 'No prompt'}...
                                                 </p>
                                                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                                                     {task.project ? (
@@ -663,23 +666,23 @@ export default function Home() {
                             <CardHeader>
                                 <CardTitle className="text-lg">Quick Actions</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-3">
+                            <CardContent className="p-2">
                                 <Link href="/projects">
-                                    <Button variant="outline" className="w-full justify-start gap-2">
-                                        <FolderGit2 className="w-4 h-4" />
-                                        Manage Projects
+                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
+                                        <FolderGit2 className="w-5 h-5" />
+                                        <span className="font-medium">Manage Projects</span>
                                     </Button>
                                 </Link>
                                 <Link href="/settings">
-                                    <Button variant="outline" className="w-full justify-start gap-2">
-                                        <Settings className="w-4 h-4" />
-                                        Settings
+                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
+                                        <Settings className="w-5 h-5" />
+                                        <span className="font-medium">Settings</span>
                                     </Button>
                                 </Link>
                                 <Link href="/projects">
-                                    <Button variant="outline" className="w-full justify-start gap-2">
-                                        <Plus className="w-4 h-4" />
-                                        New Project
+                                    <Button variant="outline" className="mb-2 w-full justify-start gap-3 h-12 px-4">
+                                        <Plus className="w-5 h-5" />
+                                        <span className="font-medium">New Project</span>
                                     </Button>
                                 </Link>
                             </CardContent>
