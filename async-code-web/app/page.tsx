@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle, FileText, Eye, GitCommit, Bell, Settings } from "lucide-react";
+import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle, FileText, Eye, GitCommit, Bell, Settings, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,16 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Task } from "@/types";
 import { formatDiff, parseDiffStats } from "@/lib/utils";
+import { ProtectedRoute } from "@/components/protected-route";
+import { useAuth } from "@/contexts/auth-context";
 
 
 
 export default function Home() {
+    const { user, signOut } = useAuth();
     const [prompt, setPrompt] = useState("");
     const [repoUrl, setRepoUrl] = useState("https://github.com/ObservedObserver/streamlit-react");
     const [branch, setBranch] = useState("main");
@@ -200,7 +204,8 @@ export default function Home() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <ProtectedRoute>
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
             {/* Notification Banner */}
             {showNotification && (
                 <div className="bg-green-600 text-white px-6 py-3 text-center relative">
@@ -230,15 +235,37 @@ export default function Home() {
                                 <p className="text-sm text-slate-500">Claude Code & Codex CLI Integration</p>
                             </div>
                         </div>
-                        <Link href="/settings">
-                            <Button
-                                variant="outline"
-                                className="gap-2"
-                            >
-                                <Settings className="w-4 h-4" />
-                                Settings
-                            </Button>
-                        </Link>
+                        <div className="flex items-center gap-4">
+                            <Link href="/settings">
+                                <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                >
+                                    <Settings className="w-4 h-4" />
+                                    Settings
+                                </Button>
+                            </Link>
+                            
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="gap-2">
+                                        <User className="w-4 h-4" />
+                                        {user?.email?.split('@')[0] || 'User'}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <div className="p-2">
+                                        <p className="text-sm font-medium">{user?.email}</p>
+                                        <p className="text-xs text-slate-500">Signed in</p>
+                                    </div>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={signOut} className="gap-2 text-red-600">
+                                        <LogOut className="w-4 h-4" />
+                                        Sign Out
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -540,5 +567,6 @@ export default function Home() {
                 </div>
             </main>
         </div>
+        </ProtectedRoute>
     );
 }
