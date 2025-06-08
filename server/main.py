@@ -94,9 +94,14 @@ def start_task():
         repo_url = data.get('repo_url')
         branch = data.get('branch', 'main')
         github_token = data.get('github_token')
+        model = data.get('model', 'claude')  # Default to claude for backward compatibility
         
         if not all([prompt, repo_url, github_token]):
             return jsonify({'error': 'prompt, repo_url, and github_token are required'}), 400
+        
+        # Validate model selection
+        if model not in ['claude', 'codex']:
+            return jsonify({'error': 'model must be either "claude" or "codex"'}), 400
         
         # Generate unique task ID
         task_id = str(uuid.uuid4())
@@ -109,6 +114,7 @@ def start_task():
             'repo_url': repo_url,
             'branch': branch,
             'github_token': github_token,
+            'model': model,
             'container_id': None,
             'commit_hash': None,
             'git_diff': None,
@@ -152,6 +158,7 @@ def get_task_status(task_id):
             'prompt': task['prompt'],
             'repo_url': task['repo_url'],
             'branch': task['branch'],
+            'model': task.get('model', 'claude'),  # Include model in response
             'commit_hash': task.get('commit_hash'),
             'changed_files': task.get('changed_files', []),
             'error': task.get('error'),
@@ -550,6 +557,7 @@ def run_claude_code_task(task_id):
         
         logger.info(f"🚀 Starting Claude Code task {task_id}")
         logger.info(f"📋 Task details: prompt='{task['prompt'][:50]}...', repo={task['repo_url']}, branch={task['branch']}")
+        logger.info(f"Starting {task.get('model', 'claude').upper()} task {task_id}")
         
         # Escape special characters in prompt for shell safety
         escaped_prompt = task['prompt'].replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
@@ -565,6 +573,9 @@ def run_claude_code_task(task_id):
             'DEBIAN_FRONTEND': 'noninteractive',  # Non-interactive package installs
             'ANTHROPIC_NONINTERACTIVE': '1'  # Custom flag for Anthropic tools
         }
+        
+        # Determine which CLI to use
+        model_cli = task.get('model', 'claude')
         
         # Create the command to run in container
         container_command = f'''
@@ -701,7 +712,7 @@ fi
 
 # Commit changes locally
 git add .
-git commit -m "Claude Code: {escaped_prompt[:100]}"
+git commit -m "{model_cli.capitalize()}: {escaped_prompt[:100]}"
 
 # Get commit info
 COMMIT_HASH=$(git rev-parse HEAD)
