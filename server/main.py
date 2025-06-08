@@ -126,7 +126,7 @@ def start_task():
         save_tasks()
         
         # Start task in background thread
-        thread = threading.Thread(target=run_claude_code_task, args=(task_id,))
+        thread = threading.Thread(target=run_ai_code_task, args=(task_id,))
         thread.daemon = True
         thread.start()
         
@@ -549,33 +549,49 @@ def apply_diff_to_content(original_content, diff_lines, filename):
         logger.error(f"❌ Error applying diff to {filename}: {str(e)}")
         return None
 
-def run_claude_code_task(task_id):
-    """Run Claude Code automation in a container"""
+def run_ai_code_task(task_id):
+    """Run AI Code automation (Claude or Codex) in a container"""
     try:
         task = tasks[task_id]
         task['status'] = TaskStatus.RUNNING
         
-        logger.info(f"🚀 Starting Claude Code task {task_id}")
-        logger.info(f"📋 Task details: prompt='{task['prompt'][:50]}...', repo={task['repo_url']}, branch={task['branch']}")
-        logger.info(f"Starting {task.get('model', 'claude').upper()} task {task_id}")
+        model_name = task.get('model', 'claude').upper()
+        logger.info(f"🚀 Starting {model_name} Code task {task_id}")
+        logger.info(f"📋 Task details: prompt='{task['prompt'][:50]}...', repo={task['repo_url']}, branch={task['branch']}, model={model_name}")
+        logger.info(f"Starting {model_name} task {task_id}")
         
         # Escape special characters in prompt for shell safety
         escaped_prompt = task['prompt'].replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
         
         # Create container environment variables
         env_vars = {
-            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
             'CI': 'true',  # Indicate we're in CI/non-interactive environment
             'TERM': 'dumb',  # Use dumb terminal to avoid interactive features
             'NO_COLOR': '1',  # Disable colors for cleaner output
             'FORCE_COLOR': '0',  # Disable colors for cleaner output
             'NONINTERACTIVE': '1',  # Common flag for non-interactive mode
             'DEBIAN_FRONTEND': 'noninteractive',  # Non-interactive package installs
-            'ANTHROPIC_NONINTERACTIVE': '1'  # Custom flag for Anthropic tools
         }
         
-        # Determine which CLI to use
+        # Add model-specific API keys and environment variables
         model_cli = task.get('model', 'claude')
+        if model_cli == 'claude':
+            env_vars.update({
+                'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
+                'ANTHROPIC_NONINTERACTIVE': '1'  # Custom flag for Anthropic tools
+            })
+        elif model_cli == 'codex':
+            env_vars.update({
+                'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
+                'OPENAI_NONINTERACTIVE': '1',  # Custom flag for OpenAI tools
+                'CODEX_QUIET_MODE': '1'  # Official Codex non-interactive flag
+            })
+        
+        # Use specialized container images based on model
+        if model_cli == 'codex':
+            container_image = 'codex-automation:latest'
+        else:
+            container_image = 'claude-code-automation:latest'
         
         # Create the command to run in container
         container_command = f'''
@@ -593,13 +609,63 @@ git config user.name "Claude Code Automation"
 # We'll extract the patch instead of pushing directly
 echo "📋 Will extract changes as patch for later PR creation..."
 
-echo "Starting Claude Code with prompt..."
+echo "Starting {model_cli.upper()} Code with prompt..."
 
 # Create a temporary file with the prompt
 echo "{escaped_prompt}" > /tmp/prompt.txt
 
-# Try different ways to invoke claude
-echo "Checking claude installation..."
+# Check which CLI tool to use based on model selection
+if [ "{model_cli}" = "codex" ]; then
+    echo "Using Codex (OpenAI Codex) CLI..."
+    
+    # Set environment variables for non-interactive mode
+    export CODEX_QUIET_MODE=1
+    
+    # Read the prompt from file
+    PROMPT_TEXT=$(cat /tmp/prompt.txt)
+    
+    # Check for codex installation
+    if [ -f /usr/local/bin/codex ]; then
+        echo "Found codex at /usr/local/bin/codex"
+        echo "Running Codex in non-interactive mode..."
+        
+        # Use non-interactive flags for Docker environment
+        # --dangerously-auto-approve-everything is required when running in Docker
+        /usr/local/bin/codex --quiet --approval-mode full-auto --dangerously-auto-approve-everything "$PROMPT_TEXT"
+        CODEX_EXIT_CODE=$?
+        echo "Codex finished with exit code: $CODEX_EXIT_CODE"
+        
+        if [ $CODEX_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Codex failed with exit code $CODEX_EXIT_CODE"
+            exit $CODEX_EXIT_CODE
+        fi
+        
+        echo "✅ Codex completed successfully"
+    elif command -v codex >/dev/null 2>&1; then
+        echo "Using codex from PATH..."
+        echo "Running Codex in non-interactive mode..."
+        
+        # Use non-interactive flags for Docker environment
+        # --dangerously-auto-approve-everything is required when running in Docker
+        codex --quiet --approval-mode full-auto --dangerously-auto-approve-everything "$PROMPT_TEXT"
+        CODEX_EXIT_CODE=$?
+        echo "Codex finished with exit code: $CODEX_EXIT_CODE"
+        if [ $CODEX_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Codex failed with exit code $CODEX_EXIT_CODE"
+            exit $CODEX_EXIT_CODE
+        fi
+        echo "✅ Codex completed successfully"
+    else
+        echo "ERROR: codex command not found anywhere"
+        echo "Please ensure Codex CLI is installed in the container"
+        exit 1
+    fi
+    
+else
+    echo "Using Claude CLI..."
+    
+    # Try different ways to invoke claude
+    echo "Checking claude installation..."
 
 if [ -f /usr/local/bin/claude ]; then
     echo "Found claude at /usr/local/bin/claude"
@@ -704,6 +770,8 @@ else
     exit 1
 fi
 
+fi  # End of model selection (claude vs codex)
+
 # Check if there are changes
 if git diff --quiet; then
     echo "No changes made"
@@ -740,10 +808,10 @@ echo "Container work completed successfully"
 exit 0
 '''
         
-        # Run container with Claude Code
-        logger.info(f"🐳 Creating Docker container for task {task_id}")
+        # Run container with unified AI Code tools (supports both Claude and Codex)
+        logger.info(f"🐳 Creating Docker container for task {task_id} using {container_image} (model: {model_name})")
         container = docker_client.containers.run(
-            'claude-code-automation:latest',
+            container_image,
             command=['bash', '-c', container_command],
             environment=env_vars,
             detach=True,
@@ -872,20 +940,21 @@ exit 0
             # Save tasks after completion
             save_tasks()
             
-            logger.info(f"🎉 Task {task_id} completed successfully! Commit: {commit_hash[:8] if commit_hash else 'N/A'}, Diff lines: {len(git_diff)}")
+            logger.info(f"🎉 {model_name} Task {task_id} completed successfully! Commit: {commit_hash[:8] if commit_hash else 'N/A'}, Diff lines: {len(git_diff)}")
             
         else:
             logger.error(f"❌ Container exited with error code {result['StatusCode']}")
             task['status'] = TaskStatus.FAILED
             task['error'] = f"Container exited with code {result['StatusCode']}: {logs}"
             save_tasks()  # Save failed task
-            logger.error(f"💥 Task {task_id} failed: {task['error'][:200]}...")
+            logger.error(f"💥 {model_name} Task {task_id} failed: {task['error'][:200]}...")
             
     except Exception as e:
-        logger.error(f"💥 Unexpected exception in task {task_id}: {str(e)}")
+        model_name = task.get('model', 'claude').upper()
+        logger.error(f"💥 Unexpected exception in {model_name} task {task_id}: {str(e)}")
         task['status'] = TaskStatus.FAILED
         task['error'] = str(e)
-        logger.error(f"🔄 Task {task_id} failed with exception: {str(e)}")
+        logger.error(f"🔄 {model_name} Task {task_id} failed with exception: {str(e)}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

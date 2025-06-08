@@ -87,6 +87,27 @@ export default function Home() {
         ? 'http://localhost:5000' 
         : '/api';
 
+    // Initialize GitHub token from localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const savedToken = localStorage.getItem('github-token');
+            if (savedToken) {
+                setGithubToken(savedToken);
+            }
+        }
+    }, []);
+
+    // Save GitHub token to localStorage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if (githubToken.trim()) {
+                localStorage.setItem('github-token', githubToken);
+            } else {
+                localStorage.removeItem('github-token');
+            }
+        }
+    }, [githubToken]);
+
     // Poll task status
     useEffect(() => {
         if (currentTask && (currentTask.status === "running" || currentTask.status === "pending")) {
