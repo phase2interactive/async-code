@@ -88,7 +88,7 @@ def run_ai_code_task(task_id):
             container_image = 'claude-code-automation:latest'
         
         # Create the command to run in container
-        container_command = rf'''
+        container_command = f'''
 set -e
 echo "Setting up repository..."
 
