@@ -177,3 +177,4 @@ storybook-static/
 coverage/
 .DS_Store
 *.pem
+tasks_backup.json

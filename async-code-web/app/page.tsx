@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle, FileText, Eye, GitCommit, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+
 
 interface Task {
     id: string;
@@ -21,6 +22,49 @@ interface Task {
     created_at: number;
 }
 
+// Parse git diff to extract statistics
+function parseDiffStats(diff: string): { additions: number; deletions: number; files: number } {
+    if (!diff) return { additions: 0, deletions: 0, files: 0 };
+    
+    const lines = diff.split('\n');
+    let additions = 0;
+    let deletions = 0;
+    const files = new Set<string>();
+    
+    for (const line of lines) {
+        if (line.startsWith('+++') || line.startsWith('---')) {
+            const filePath = line.substring(4);
+            if (filePath !== '/dev/null') {
+                files.add(filePath);
+            }
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+            additions++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+            deletions++;
+        }
+    }
+    
+    return { additions, deletions, files: files.size };
+}
+
+// Format git diff with basic syntax highlighting
+function formatDiff(diff: string): string {
+    if (!diff) return '';
+    
+    return diff.split('\n').map(line => {
+        if (line.startsWith('+++') || line.startsWith('---')) {
+            return line; // File headers
+        } else if (line.startsWith('@@')) {
+            return line; // Hunk headers
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+            return line; // Additions
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+            return line; // Deletions
+        }
+        return line; // Context lines
+    }).join('\n');
+}
+
 export default function Home() {
     const [prompt, setPrompt] = useState("");
     const [repoUrl, setRepoUrl] = useState("https://github.com/ObservedObserver/streamlit-react");
@@ -30,6 +74,11 @@ export default function Home() {
     const [gitDiff, setGitDiff] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [showTokenInput, setShowTokenInput] = useState(false);
+    const [showNotification, setShowNotification] = useState(false);
+    const [notificationMessage, setNotificationMessage] = useState("");
+    const [diffStats, setDiffStats] = useState({ additions: 0, deletions: 0, files: 0 });
+    const [tokenValidation, setTokenValidation] = useState<any>(null);
+    const [isValidatingToken, setIsValidatingToken] = useState(false);
 
     const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
         ? 'http://localhost:5000' 
@@ -37,22 +86,39 @@ export default function Home() {
 
     // Poll task status
     useEffect(() => {
-        if (currentTask && currentTask.status === "running") {
+        if (currentTask && (currentTask.status === "running" || currentTask.status === "pending")) {
+            console.log(`Starting polling for task ${currentTask.id} with status: ${currentTask.status}`);
             const interval = setInterval(async () => {
                 try {
                     const response = await fetch(`${API_BASE}/task-status/${currentTask.id}`);
                     const data = await response.json();
                     
+                    console.log(`Polling response for task ${currentTask.id}:`, data);
+                    
                     if (data.status === 'success') {
+                        const previousStatus = currentTask.status;
                         setCurrentTask(data.task);
                         
-                        if (data.task.status === "completed") {
+                        if (data.task.status === "completed" && previousStatus !== "completed") {
+                            // Task just completed - show notification
+                            setNotificationMessage("🎉 Claude Code has finished making changes to your repository!");
+                            setShowNotification(true);
+                            setTimeout(() => setShowNotification(false), 5000);
+                            
                             // Fetch git diff
                             const diffResponse = await fetch(`${API_BASE}/git-diff/${currentTask.id}`);
                             const diffData = await diffResponse.json();
                             if (diffData.status === 'success') {
                                 setGitDiff(diffData.git_diff);
+                                // Parse diff statistics
+                                const stats = parseDiffStats(diffData.git_diff);
+                                setDiffStats(stats);
                             }
+                        } else if (data.task.status === "failed" && previousStatus !== "failed") {
+                            // Task just failed - show notification
+                            setNotificationMessage("❌ Task failed. Please check the error details below.");
+                            setShowNotification(true);
+                            setTimeout(() => setShowNotification(false), 5000);
                         }
                     }
                 } catch (error) {
@@ -60,7 +126,10 @@ export default function Home() {
                 }
             }, 2000);
 
-            return () => clearInterval(interval);
+            return () => {
+                console.log(`Stopping polling for task ${currentTask.id}`);
+                clearInterval(interval);
+            };
         }
     }, [currentTask, API_BASE]);
 
@@ -104,6 +173,55 @@ export default function Home() {
             alert(`Error starting task: ${error}`);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleValidateToken = async () => {
+        if (!githubToken.trim() || !repoUrl.trim()) {
+            alert('Please provide both GitHub token and repository URL');
+            return;
+        }
+
+        setIsValidatingToken(true);
+        try {
+            const response = await fetch(`${API_BASE}/validate-token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    github_token: githubToken,
+                    repo_url: repoUrl
+                })
+            });
+
+            const data = await response.json();
+            setTokenValidation(data);
+            
+            if (data.status === 'success') {
+                const permissions = data.repo?.permissions || {};
+                const permissionSummary = [
+                    `User: ${data.user}`,
+                    `Repo: ${data.repo?.name || 'N/A'}`,
+                    `Read: ${permissions.read ? 'Yes' : 'No'}`,
+                    `Write: ${permissions.write ? 'Yes' : 'No'}`,
+                    `Create Branches: ${permissions.create_branches ? 'Yes' : 'No'}`,
+                    `Admin: ${permissions.admin ? 'Yes' : 'No'}`
+                ].join('\n');
+                
+                if (permissions.create_branches) {
+                    alert(`✅ Token is fully valid for PR creation!\n\n${permissionSummary}`);
+                } else {
+                    alert(`⚠️ Token validation partial success!\n\n${permissionSummary}\n\n❌ Cannot create branches - this will prevent PR creation.\nPlease ensure your token has 'repo' scope (not just 'public_repo').`);
+                }
+            } else {
+                alert(`❌ Token validation failed: ${data.error}`);
+            }
+        } catch (error) {
+            alert(`Error validating token: ${error}`);
+            setTokenValidation({ error: String(error) });
+        } finally {
+            setIsValidatingToken(false);
         }
     };
 
@@ -157,6 +275,22 @@ export default function Home() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+            {/* Notification Banner */}
+            {showNotification && (
+                <div className="bg-green-600 text-white px-6 py-3 text-center relative">
+                    <div className="flex items-center justify-center gap-2">
+                        <Bell className="w-4 h-4" />
+                        <span>{notificationMessage}</span>
+                    </div>
+                    <button
+                        onClick={() => setShowNotification(false)}
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200"
+                    >
+                        <XCircle className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
             <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
                 <div className="container mx-auto px-6 py-4">
@@ -221,6 +355,27 @@ export default function Home() {
                                     <p className="text-sm text-blue-600">
                                         Requires repository access permissions for cloning and creating pull requests
                                     </p>
+                                </div>
+                                <div className="flex gap-2 mt-4">
+                                    <Button
+                                        onClick={handleValidateToken}
+                                        disabled={isValidatingToken || !githubToken.trim() || !repoUrl.trim()}
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                    >
+                                        <CheckCircle className="w-3 h-3" />
+                                        {isValidatingToken ? 'Validating...' : 'Validate Token'}
+                                    </Button>
+                                    {tokenValidation && (
+                                        <div className="text-xs text-slate-600 flex items-center">
+                                            {tokenValidation.status === 'success' ? (
+                                                <span className="text-green-600">✅ Valid</span>
+                                            ) : (
+                                                <span className="text-red-600">❌ Invalid</span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
@@ -312,7 +467,7 @@ export default function Home() {
                                             {new Date(currentTask.created_at).toLocaleString()} • {currentTask.repo_url}
                                         </CardDescription>
                                     </div>
-                                    {currentTask.status === "completed" && (
+{currentTask.status === "completed" && !gitDiff && (
                                         <Button
                                             onClick={handleCreatePR}
                                             variant="default"
@@ -332,6 +487,26 @@ export default function Home() {
                                     </p>
                                 </div>
 
+                                {/* Running Status Indicator */}
+                                {currentTask.status === "running" && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="animate-spin">
+                                                <AlertCircle className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-blue-900">Claude is working on your code...</div>
+                                                <div className="text-sm text-blue-700 mt-1">
+                                                    Analyzing repository, making changes, and preparing commit. This may take a few minutes.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 bg-blue-100 rounded-full h-2">
+                                            <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {currentTask.error && (
                                     <div className="p-3 bg-red-50 border border-red-200 rounded-md">
                                         <div className="flex items-center gap-2 text-red-800">
@@ -346,15 +521,87 @@ export default function Home() {
 
                                 {/* Git Diff Display */}
                                 {gitDiff && (
-                                    <div className="space-y-2">
-                                        <Label className="text-sm font-medium flex items-center gap-2">
-                                            <CheckCircle className="w-4 h-4 text-green-600" />
-                                            Changes Made
-                                        </Label>
-                                        <div className="bg-slate-900 rounded-lg overflow-hidden">
-                                            <pre className="text-sm text-slate-100 p-4 overflow-x-auto max-h-96 overflow-y-auto">
-                                                {gitDiff}
-                                            </pre>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-sm font-medium flex items-center gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                                Code Review
+                                            </Label>
+                                            <div className="flex items-center gap-4 text-sm">
+                                                <div className="flex items-center gap-1">
+                                                    <FileText className="w-3 h-3 text-slate-500" />
+                                                    <span className="text-slate-600">{diffStats.files} files</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-green-600">+{diffStats.additions}</span>
+                                                    <span className="text-red-600">-{diffStats.deletions}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Diff Statistics Summary */}
+                                        <div className="bg-slate-50 rounded-lg p-4 border">
+                                            <div className="flex items-center gap-6 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <GitCommit className="w-4 h-4 text-slate-500" />
+                                                    <span className="font-medium">Commit:</span>
+                                                    <code className="bg-slate-200 px-2 py-1 rounded text-xs">
+                                                        {currentTask.commit_hash?.substring(0, 8)}
+                                                    </code>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Eye className="w-4 h-4 text-slate-500" />
+                                                    <span>Ready for review</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Enhanced Diff Display */}
+                                        <div className="bg-slate-900 rounded-lg overflow-hidden border">
+                                            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-slate-300 text-sm font-medium">Changes</span>
+                                                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                                                        <span className="bg-green-600/20 text-green-400 px-2 py-1 rounded">
+                                                            +{diffStats.additions}
+                                                        </span>
+                                                        <span className="bg-red-600/20 text-red-400 px-2 py-1 rounded">
+                                                            -{diffStats.deletions}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="max-h-96 overflow-y-auto">
+                                                <pre className="text-sm text-slate-100 p-4 overflow-x-auto">
+                                                    {formatDiff(gitDiff)}
+                                                </pre>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center justify-between pt-2">
+                                            <div className="text-sm text-slate-600">
+                                                Review the changes above, then create a pull request to merge them.
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => navigator.clipboard.writeText(gitDiff)}
+                                                    className="gap-2"
+                                                >
+                                                    <FileText className="w-3 h-3" />
+                                                    Copy Diff
+                                                </Button>
+                                                <Button
+                                                    onClick={handleCreatePR}
+                                                    size="sm"
+                                                    className="gap-2"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                    Create PR
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
