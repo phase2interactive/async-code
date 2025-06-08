@@ -205,7 +205,7 @@ export default function ProjectTasksPage() {
                                                     </span>
                                                 </div>
                                                 <p className="text-sm font-medium text-slate-900 truncate mb-1">
-                                                    {task.chat_messages?.[0]?.content || 'No prompt available'}
+                                                    {(task.chat_messages as any[])?.[0]?.content || 'No prompt available'}
                                                 </p>
                                                 <div className="flex items-center gap-4 text-xs text-slate-500">
                                                     <span>Created: {new Date(task.created_at || '').toLocaleString()}</span>

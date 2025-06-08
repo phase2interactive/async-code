@@ -1,10 +1,13 @@
-import { supabase } from './supabase'
+import { getSupabase } from './supabase'
 import { Project, Task, ProjectWithStats, ChatMessage } from '@/types'
 
 export class SupabaseService {
+    private static get supabase() {
+        return getSupabase()
+    }
     // Project operations
     static async getProjects(): Promise<ProjectWithStats[]> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('projects')
             .select(`
                 *,
@@ -35,10 +38,10 @@ export class SupabaseService {
         settings?: any
     }): Promise<Project> {
         // Get current authenticated user
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         if (!user) throw new Error('No authenticated user')
 
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('projects')
             .insert([{ ...projectData, user_id: user.id }])
             .select()
@@ -49,7 +52,7 @@ export class SupabaseService {
     }
 
     static async updateProject(id: number, updates: Partial<Project>): Promise<Project> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('projects')
             .update(updates)
             .eq('id', id)
@@ -61,7 +64,7 @@ export class SupabaseService {
     }
 
     static async deleteProject(id: number): Promise<void> {
-        const { error } = await supabase
+        const { error } = await this.supabase
             .from('projects')
             .delete()
             .eq('id', id)
@@ -70,7 +73,7 @@ export class SupabaseService {
     }
 
     static async getProject(id: number): Promise<Project | null> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('projects')
             .select('*')
             .eq('id', id)
@@ -86,10 +89,10 @@ export class SupabaseService {
     // Task operations
     static async getTasks(projectId?: number): Promise<Task[]> {
         // Get current authenticated user
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         if (!user) throw new Error('No authenticated user')
 
-        let query = supabase
+        let query = this.supabase
             .from('tasks')
             .select(`
                 *,
@@ -113,7 +116,7 @@ export class SupabaseService {
     }
 
     static async getTask(id: number): Promise<Task | null> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('tasks')
             .select(`
                 *,
@@ -142,10 +145,10 @@ export class SupabaseService {
         chat_messages?: ChatMessage[]
     }): Promise<Task> {
         // Get current authenticated user
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         if (!user) throw new Error('No authenticated user')
 
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('tasks')
             .insert([{
                 ...taskData,
@@ -161,7 +164,7 @@ export class SupabaseService {
     }
 
     static async updateTask(id: number, updates: Partial<Task>): Promise<Task> {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('tasks')
             .update(updates)
             .eq('id', id)
@@ -174,7 +177,7 @@ export class SupabaseService {
 
     static async addChatMessage(taskId: number, message: ChatMessage): Promise<Task> {
         // First get the current task to get existing messages
-        const { data: task, error: fetchError } = await supabase
+        const { data: task, error: fetchError } = await this.supabase
             .from('tasks')
             .select('chat_messages')
             .eq('id', taskId)
@@ -185,7 +188,7 @@ export class SupabaseService {
         const existingMessages = (task.chat_messages as unknown as ChatMessage[]) || []
         const updatedMessages = [...existingMessages, message]
 
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('tasks')
             .update({ 
                 chat_messages: updatedMessages as any,
@@ -201,15 +204,15 @@ export class SupabaseService {
 
     // User operations
     static async getCurrentUser() {
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         return user
     }
 
     static async getUserProfile() {
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         if (!user) return null
 
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('users')
             .select('*')
             .eq('id', user.id)
@@ -228,10 +231,10 @@ export class SupabaseService {
         github_token?: string
         preferences?: any
     }) {
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await this.supabase.auth.getUser()
         if (!user) throw new Error('No authenticated user')
 
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('users')
             .update(updates)
             .eq('id', user.id)
