@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle, FileText, Eye, GitCommit, Bell } from "lucide-react";
+import { Github, GitBranch, Code2, ExternalLink, CheckCircle, Clock, XCircle, AlertCircle, FileText, Eye, GitCommit, Bell, Settings } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,12 +77,9 @@ export default function Home() {
     const [currentTask, setCurrentTask] = useState<Task | null>(null);
     const [gitDiff, setGitDiff] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [showTokenInput, setShowTokenInput] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
     const [notificationMessage, setNotificationMessage] = useState("");
     const [diffStats, setDiffStats] = useState({ additions: 0, deletions: 0, files: 0 });
-    const [tokenValidation, setTokenValidation] = useState<any>(null);
-    const [isValidatingToken, setIsValidatingToken] = useState(false);
 
     const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
         ? 'http://localhost:5000' 
@@ -202,54 +200,7 @@ export default function Home() {
         }
     };
 
-    const handleValidateToken = async () => {
-        if (!githubToken.trim() || !repoUrl.trim()) {
-            alert('Please provide both GitHub token and repository URL');
-            return;
-        }
 
-        setIsValidatingToken(true);
-        try {
-            const response = await fetch(`${API_BASE}/validate-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    github_token: githubToken,
-                    repo_url: repoUrl
-                })
-            });
-
-            const data = await response.json();
-            setTokenValidation(data);
-            
-            if (data.status === 'success') {
-                const permissions = data.repo?.permissions || {};
-                const permissionSummary = [
-                    `User: ${data.user}`,
-                    `Repo: ${data.repo?.name || 'N/A'}`,
-                    `Read: ${permissions.read ? 'Yes' : 'No'}`,
-                    `Write: ${permissions.write ? 'Yes' : 'No'}`,
-                    `Create Branches: ${permissions.create_branches ? 'Yes' : 'No'}`,
-                    `Admin: ${permissions.admin ? 'Yes' : 'No'}`
-                ].join('\n');
-                
-                if (permissions.create_branches) {
-                    alert(`✅ Token is fully valid for PR creation!\n\n${permissionSummary}`);
-                } else {
-                    alert(`⚠️ Token validation partial success!\n\n${permissionSummary}\n\n❌ Cannot create branches - this will prevent PR creation.\nPlease ensure your token has 'repo' scope (not just 'public_repo').`);
-                }
-            } else {
-                alert(`❌ Token validation failed: ${data.error}`);
-            }
-        } catch (error) {
-            alert(`Error validating token: ${error}`);
-            setTokenValidation({ error: String(error) });
-        } finally {
-            setIsValidatingToken(false);
-        }
-    };
 
     const handleCreatePR = async () => {
         if (!currentTask || currentTask.status !== "completed") return;
@@ -331,15 +282,15 @@ export default function Home() {
                                 <p className="text-sm text-slate-500">Claude Code & Codex CLI Integration</p>
                             </div>
                         </div>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowTokenInput(!showTokenInput)}
-                            className="gap-2"
-                        >
-                            <Github className="w-4 h-4" />
-                            {showTokenInput && "Hide"} 
-                            {!showTokenInput && "Setup"} Token
-                        </Button>
+                        <Link href="/settings">
+                            <Button
+                                variant="outline"
+                                className="gap-2"
+                            >
+                                <Settings className="w-4 h-4" />
+                                Settings
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </header>
@@ -356,57 +307,6 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-6">
-                    {/* GitHub Token Input */}
-                    {showTokenInput && (
-                        <Card className="border-blue-200 bg-blue-50/50">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Github className="w-5 h-5" />
-                                    GitHub Authentication
-                                </CardTitle>
-                                <CardDescription>
-                                    Enter your GitHub Personal Access Token to enable repository access and PR creation
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    <Label htmlFor="github-token">Personal Access Token</Label>
-                                    <Input
-                                        id="github-token"
-                                        type="password"
-                                        value={githubToken}
-                                        onChange={(e) => setGithubToken(e.target.value)}
-                                        placeholder="ghp_..."
-                                        className="font-mono"
-                                    />
-                                    <p className="text-sm text-blue-600">
-                                        Requires repository access permissions for cloning and creating pull requests
-                                    </p>
-                                </div>
-                                <div className="flex gap-2 mt-4">
-                                    <Button
-                                        onClick={handleValidateToken}
-                                        disabled={isValidatingToken || !githubToken.trim() || !repoUrl.trim()}
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2"
-                                    >
-                                        <CheckCircle className="w-3 h-3" />
-                                        {isValidatingToken ? 'Validating...' : 'Validate Token'}
-                                    </Button>
-                                    {tokenValidation && (
-                                        <div className="text-xs text-slate-600 flex items-center">
-                                            {tokenValidation.status === 'success' ? (
-                                                <span className="text-green-600">✅ Valid</span>
-                                            ) : (
-                                                <span className="text-red-600">❌ Invalid</span>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {/* Main Input Card */}
                     <Card>
@@ -415,6 +315,20 @@ export default function Home() {
                             <CardDescription>
                                 Describe the feature, bug fix, or enhancement you want Claude to implement
                             </CardDescription>
+                            {!githubToken.trim() && (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                                    <div className="flex items-start gap-2 text-amber-800">
+                                        <Github className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm">
+                                            <strong>GitHub Token Required:</strong> Please configure your GitHub token in{" "}
+                                            <Link href="/settings" className="underline hover:text-amber-900">
+                                                Settings
+                                            </Link>{" "}
+                                            to enable code generation.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-2">
@@ -473,10 +387,10 @@ export default function Home() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="claude">
-                                                Claude Code - Anthropic's advanced coding model
+                                                Claude Code - Anthropic&apos;s advanced coding model
                                             </SelectItem>
                                             <SelectItem value="codex">
-                                                Codex CLI - OpenAI's lightweight coding agent
+                                                Codex CLI - OpenAI&apos;s lightweight coding agent
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
