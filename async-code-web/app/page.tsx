@@ -11,62 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Task } from "@/types";
+import { formatDiff, parseDiffStats } from "@/lib/utils";
 
 
-interface Task {
-    id: string;
-    status: string;
-    prompt: string;
-    repo_url: string;
-    branch: string;
-    model?: string;
-    commit_hash?: string;
-    error?: string;
-    created_at: number;
-}
-
-// Parse git diff to extract statistics
-function parseDiffStats(diff: string): { additions: number; deletions: number; files: number } {
-    if (!diff) return { additions: 0, deletions: 0, files: 0 };
-    
-    const lines = diff.split('\n');
-    let additions = 0;
-    let deletions = 0;
-    const files = new Set<string>();
-    
-    for (const line of lines) {
-        if (line.startsWith('+++') || line.startsWith('---')) {
-            const filePath = line.substring(4);
-            if (filePath !== '/dev/null') {
-                files.add(filePath);
-            }
-        } else if (line.startsWith('+') && !line.startsWith('+++')) {
-            additions++;
-        } else if (line.startsWith('-') && !line.startsWith('---')) {
-            deletions++;
-        }
-    }
-    
-    return { additions, deletions, files: files.size };
-}
-
-// Format git diff with basic syntax highlighting
-function formatDiff(diff: string): string {
-    if (!diff) return '';
-    
-    return diff.split('\n').map(line => {
-        if (line.startsWith('+++') || line.startsWith('---')) {
-            return line; // File headers
-        } else if (line.startsWith('@@')) {
-            return line; // Hunk headers
-        } else if (line.startsWith('+') && !line.startsWith('+++')) {
-            return line; // Additions
-        } else if (line.startsWith('-') && !line.startsWith('---')) {
-            return line; // Deletions
-        }
-        return line; // Context lines
-    }).join('\n');
-}
 
 export default function Home() {
     const [prompt, setPrompt] = useState("");
