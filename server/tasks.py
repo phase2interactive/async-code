@@ -430,19 +430,14 @@ def create_pull_request(task_id):
         # Apply the patch by creating/updating files
         logger.info(f"📦 Applying patch with {len(task.get('changed_files', []))} changed files...")
         
-        # For now, we'll use a simple approach to apply changes
-        # In a real implementation, you'd want a more sophisticated patch parser
+        # Parse and apply the git patch to the repository
         patch_content = task['git_patch']
-        files_updated = []
+        files_updated = apply_patch_to_github_repo(repo, pr_branch, patch_content, task)
         
-        # Simple file update based on changed_files list
-        for file_path in task.get('changed_files', []):
-            try:
-                # This is a simplified approach - in reality you'd parse the patch properly
-                logger.info(f"📝 Updating file: {file_path}")
-                files_updated.append(file_path)
-            except Exception as e:
-                logger.warning(f"Failed to update {file_path}: {e}")
+        if not files_updated:
+            return jsonify({'error': 'Failed to apply patch - no file changes extracted'}), 500
+            
+        logger.info(f"✅ Applied patch, updated {len(files_updated)} files")
         
         # Create pull request
         pr = repo.create_pull(
@@ -521,3 +516,145 @@ def migrate_legacy_tasks():
     except Exception as e:
         logger.error(f"Error migrating legacy tasks: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+def apply_patch_to_github_repo(repo, branch, patch_content, task):
+    """Apply a git patch to a GitHub repository using the GitHub API"""
+    try:
+        logger.info(f"🔧 Parsing patch content...")
+        
+        # Parse git patch format to extract file changes
+        files_to_update = {}
+        current_file = None
+        new_content_lines = []
+        
+        # This is a simplified patch parser - for production you might want a more robust one
+        lines = patch_content.split('\n')
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i]
+            
+            # Look for file headers in patch format
+            if line.startswith('--- a/') or line.startswith('--- /dev/null'):
+                # Next line should be +++ b/filename
+                if i + 1 < len(lines) and lines[i + 1].startswith('+++ b/'):
+                    current_file = lines[i + 1][6:]  # Remove '+++ b/'
+                    logger.info(f"📄 Found file change: {current_file}")
+                    
+                    # Get the original file content if it exists
+                    try:
+                        file_obj = repo.get_contents(current_file, ref=branch)
+                        original_content = file_obj.decoded_content.decode('utf-8')
+                        logger.info(f"📥 Got original content for {current_file}")
+                    except:
+                        original_content = ""  # New file
+                        logger.info(f"📝 New file: {current_file}")
+                    
+                    # For simplicity, we'll reconstruct the file from the diff
+                    # Skip to the actual diff content (after @@)
+                    j = i + 2
+                    while j < len(lines) and not lines[j].startswith('@@'):
+                        j += 1
+                    
+                    if j < len(lines):
+                        # Apply the diff changes
+                        new_content = apply_diff_to_content(original_content, lines[j:], current_file)
+                        if new_content is not None:
+                            files_to_update[current_file] = new_content
+                            logger.info(f"✅ Prepared update for {current_file}")
+                    
+                    i = j
+            i += 1
+        
+        # Now update all the files via GitHub API
+        updated_files = []
+        commit_message = f"Claude Code: {task.get('prompt', 'Automated changes')[:100]}"
+        
+        # Get prompt from chat messages if available
+        if task.get('chat_messages'):
+            for msg in task['chat_messages']:
+                if msg.get('role') == 'user':
+                    commit_message = f"Claude Code: {msg.get('content', '')[:100]}"
+                    break
+        
+        for file_path, new_content in files_to_update.items():
+            try:
+                # Check if file exists
+                try:
+                    file_obj = repo.get_contents(file_path, ref=branch)
+                    # Update existing file
+                    repo.update_file(
+                        path=file_path,
+                        message=commit_message,
+                        content=new_content,
+                        sha=file_obj.sha,
+                        branch=branch
+                    )
+                    logger.info(f"📝 Updated existing file: {file_path}")
+                except:
+                    # Create new file
+                    repo.create_file(
+                        path=file_path,
+                        message=commit_message,
+                        content=new_content,
+                        branch=branch
+                    )
+                    logger.info(f"🆕 Created new file: {file_path}")
+                
+                updated_files.append(file_path)
+                
+            except Exception as file_error:
+                logger.error(f"❌ Failed to update {file_path}: {file_error}")
+        
+        return updated_files
+        
+    except Exception as e:
+        logger.error(f"💥 Error applying patch: {str(e)}")
+        return []
+
+
+def apply_diff_to_content(original_content, diff_lines, filename):
+    """Apply diff changes to original content - simplified implementation"""
+    try:
+        # For now, let's use a simple approach: reconstruct from + lines
+        # This is not a complete diff parser, but works for basic cases
+        
+        result_lines = []
+        original_lines = original_content.split('\n') if original_content else []
+        
+        # Find the actual diff content starting from @@ line
+        diff_start = 0
+        for i, line in enumerate(diff_lines):
+            if line.startswith('@@'):
+                diff_start = i + 1
+                break
+        
+        # Simple reconstruction: take context and + lines, skip - lines
+        for line in diff_lines[diff_start:]:
+            if line.startswith('+++') or line.startswith('---'):
+                continue
+            elif line.startswith('+') and not line.startswith('+++'):
+                result_lines.append(line[1:])  # Remove the +
+            elif line.startswith(' '):  # Context line
+                result_lines.append(line[1:])  # Remove the space
+            elif line.startswith('-'):
+                continue  # Skip removed lines
+            elif line.strip() == '':
+                continue  # Skip empty lines in diff
+            else:
+                # Check if we've reached the next file
+                if line.startswith('diff --git') or line.startswith('--- a/'):
+                    break
+        
+        # If we got content, return it, otherwise fall back to using the git diff directly
+        if result_lines:
+            return '\n'.join(result_lines)
+        else:
+            # Fallback: return original content (no changes applied)
+            logger.warning(f"⚠️ Could not parse diff for {filename}, keeping original")
+            return original_content
+            
+    except Exception as e:
+        logger.error(f"❌ Error applying diff to {filename}: {str(e)}")
+        return None
