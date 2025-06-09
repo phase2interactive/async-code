@@ -16,9 +16,7 @@ export default function SettingsPage() {
     const [isValidatingToken, setIsValidatingToken] = useState(false);
     const [repoUrl, setRepoUrl] = useState("https://github.com/ObservedObserver/streamlit-react");
 
-    const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-        ? 'http://localhost:5000' 
-        : '/api';
+    const API_BASE = '/api';
 
     // Initialize GitHub token from localStorage
     useEffect(() => {

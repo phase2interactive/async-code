@@ -9,6 +9,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
+    env_file:
+      - ./async-code-web/.env
     volumes:
       - ./async-code-web:/app
       - /app/node_modules
