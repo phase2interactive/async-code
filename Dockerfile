@@ -32,5 +32,5 @@ RUN chmod +x ./setup.sh
 # Expose the port that the app runs on (adjust if needed)
 EXPOSE 3000
 
-# Set the default command to run setup.sh
-CMD ["./setup.sh"] 
+# Set the default command to run the Next.js dev server
+CMD ["npm", "run", "dev"] 
