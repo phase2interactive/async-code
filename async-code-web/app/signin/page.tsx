@@ -2,7 +2,7 @@
 
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -57,7 +57,7 @@ export default function SignIn() {
                     </CardHeader>
                     <CardContent>
                         <Auth
-                            supabaseClient={supabase}
+                            supabaseClient={getSupabase()}
                             appearance={{
                                 theme: ThemeSupa,
                                 variables: {
