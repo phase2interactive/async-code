@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProtectedRoute } from "@/components/protected-route";
 import { TaskStatusBadge } from "@/components/task-status-badge";
+import { PRStatusBadge } from "@/components/pr-status-badge";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiService } from "@/lib/api-service";
+import { SupabaseService } from "@/lib/supabase-service";
 import { Task, Project } from "@/types";
 
 interface TaskWithProject extends Task {
@@ -44,13 +46,16 @@ export default function TasksPage() {
         const interval = setInterval(async () => {
             try {
                 const updatedTasks = await Promise.all(
-                    runningTasks.map(task => ApiService.getTaskStatus(user.id, task.id))
+                    runningTasks.map(task => SupabaseService.getTask(task.id))
                 );
 
                 setTasks(prevTasks => 
                     prevTasks.map(task => {
-                        const updated = updatedTasks.find(t => t.id === task.id);
-                        return updated ? { ...task, ...updated } : task;
+                        const updated = updatedTasks.find(t => t && t.id === task.id);
+                        if (updated) {
+                            return { ...task, ...updated };
+                        }
+                        return task;
                     })
                 );
             } catch (error) {
@@ -67,7 +72,7 @@ export default function TasksPage() {
         try {
             setLoading(true);
             const [taskData, projectData] = await Promise.all([
-                ApiService.getTasks(user.id),
+                SupabaseService.getTasks(),
                 ApiService.getProjects(user.id)
             ]);
 
@@ -374,6 +379,15 @@ export default function TasksPage() {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 mb-3">
                                                     <TaskStatusBadge status={task.status || ''} />
+                                                    {task.pr_url && task.pr_number && (
+                                                        <PRStatusBadge 
+                                                            prUrl={task.pr_url}
+                                                            prNumber={task.pr_number}
+                                                            prBranch={task.pr_branch}
+                                                            variant="badge"
+                                                            size="default"
+                                                        />
+                                                    )}
                                                     <span className="text-sm text-slate-500">
                                                         Task #{task.id}
                                                     </span>
@@ -432,17 +446,14 @@ export default function TasksPage() {
                                                         View
                                                     </Button>
                                                 </Link>
-                                                {task.pr_url && (
-                                                    <a 
-                                                        href={task.pr_url} 
-                                                        target="_blank" 
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        <Button variant="outline" size="sm" className="gap-2">
-                                                            <ExternalLink className="w-4 h-4" />
-                                                            PR #{task.pr_number}
-                                                        </Button>
-                                                    </a>
+                                                {task.pr_url && task.pr_number && (
+                                                    <PRStatusBadge 
+                                                        prUrl={task.pr_url}
+                                                        prNumber={task.pr_number}
+                                                        prBranch={task.pr_branch}
+                                                        variant="button"
+                                                        size="sm"
+                                                    />
                                                 )}
                                             </div>
                                         </div>
