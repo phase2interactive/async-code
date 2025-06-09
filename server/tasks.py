@@ -567,7 +567,11 @@ def apply_patch_to_github_repo(repo, branch, patch_content, task):
                     i = j
             i += 1
         
-        # Now update all the files via GitHub API
+        # Create a single commit with all file changes using GitHub's Tree API
+        if not files_to_update:
+            logger.warning("⚠️ No files to update")
+            return []
+        
         updated_files = []
         commit_message = f"Claude Code: {task.get('prompt', 'Automated changes')[:100]}"
         
@@ -578,34 +582,77 @@ def apply_patch_to_github_repo(repo, branch, patch_content, task):
                     commit_message = f"Claude Code: {msg.get('content', '')[:100]}"
                     break
         
-        for file_path, new_content in files_to_update.items():
-            try:
-                # Check if file exists
-                try:
-                    file_obj = repo.get_contents(file_path, ref=branch)
-                    # Update existing file
-                    repo.update_file(
-                        path=file_path,
-                        message=commit_message,
-                        content=new_content,
-                        sha=file_obj.sha,
-                        branch=branch
-                    )
-                    logger.info(f"📝 Updated existing file: {file_path}")
-                except:
-                    # Create new file
-                    repo.create_file(
-                        path=file_path,
-                        message=commit_message,
-                        content=new_content,
-                        branch=branch
-                    )
-                    logger.info(f"🆕 Created new file: {file_path}")
+        try:
+            # Get the current commit to build upon
+            current_commit = repo.get_commit(branch)
+            
+            # Create tree elements for all changed files
+            tree_elements = []
+            
+            for file_path, new_content in files_to_update.items():
+                # Create a blob for the file content
+                blob = repo.create_git_blob(new_content, "utf-8")
                 
+                # Add to tree elements
+                tree_elements.append({
+                    "path": file_path,
+                    "mode": "100644",  # Normal file mode
+                    "type": "blob",
+                    "sha": blob.sha
+                })
+                
+                logger.info(f"📝 Prepared blob for {file_path}")
                 updated_files.append(file_path)
-                
-            except Exception as file_error:
-                logger.error(f"❌ Failed to update {file_path}: {file_error}")
+            
+            # Create a new tree with all the changes
+            new_tree = repo.create_git_tree(tree_elements, base_tree=current_commit.commit.tree)
+            
+            # Create a single commit with all the changes
+            new_commit = repo.create_git_commit(
+                message=commit_message,
+                tree=new_tree,
+                parents=[current_commit.commit]
+            )
+            
+            # Update the branch to point to the new commit
+            ref = repo.get_git_ref(f"heads/{branch}")
+            ref.edit(new_commit.sha)
+            
+            logger.info(f"✅ Created single commit {new_commit.sha[:8]} with {len(updated_files)} files")
+            
+        except Exception as commit_error:
+            logger.error(f"❌ Failed to create single commit: {commit_error}")
+            # Fallback to individual file updates if tree method fails
+            logger.info("🔄 Falling back to individual file updates...")
+            
+            for file_path, new_content in files_to_update.items():
+                try:
+                    # Check if file exists
+                    try:
+                        file_obj = repo.get_contents(file_path, ref=branch)
+                        # Update existing file
+                        repo.update_file(
+                            path=file_path,
+                            message=commit_message,
+                            content=new_content,
+                            sha=file_obj.sha,
+                            branch=branch
+                        )
+                        logger.info(f"📝 Updated existing file: {file_path}")
+                    except:
+                        # Create new file
+                        repo.create_file(
+                            path=file_path,
+                            message=commit_message,
+                            content=new_content,
+                            branch=branch
+                        )
+                        logger.info(f"🆕 Created new file: {file_path}")
+                    
+                    updated_files.append(file_path)
+                    
+                except Exception as file_error:
+                    logger.error(f"❌ Failed to update {file_path}: {file_error}")
         
         return updated_files
         

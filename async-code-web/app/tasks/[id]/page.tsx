@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Github, Clock, CheckCircle, XCircle, AlertCircle, GitCommit, FileText, ExternalLink, MessageSquare, Plus, Copy } from "lucide-react";
+import { ArrowLeft, Github, Clock, CheckCircle, XCircle, AlertCircle, GitCommit, FileText, ExternalLink, MessageSquare, Plus, Copy, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { ApiService } from "@/lib/api-service";
 import { Task, Project, ChatMessage } from "@/types";
 import { formatDiff, parseDiffStats } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff-viewer";
+import { toast } from "sonner";
 
 interface TaskWithProject extends Task {
     project?: Project
@@ -32,6 +33,7 @@ export default function TaskDetailPage() {
     const [diffStats, setDiffStats] = useState({ additions: 0, deletions: 0, files: 0 });
     const [newMessage, setNewMessage] = useState("");
     const [githubToken, setGithubToken] = useState("");
+    const [creatingPR, setCreatingPR] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -111,19 +113,24 @@ export default function TaskDetailPage() {
                 content: newMessage.trim()
             });
             setNewMessage("");
+            toast.success("Message added successfully");
             loadTask(); // Reload to get updated messages
         } catch (error) {
             console.error('Error adding message:', error);
-            alert('Error adding message');
+            toast.error('Failed to add message');
         }
     };
 
     const handleCreatePR = async () => {
         if (!task || task.status !== "completed" || !user?.id) return;
 
+        setCreatingPR(true);
+        
         try {
             const prompt = (task.chat_messages as unknown as ChatMessage[])?.[0]?.content || '';
             const modelName = task.agent === 'codex' ? 'Codex' : 'Claude Code';
+            
+            toast.loading("Creating pull request...");
             
             const response = await ApiService.createPullRequest(user.id, task.id, {
                 title: `${modelName}: ${prompt.substring(0, 50)}...`,
@@ -131,10 +138,19 @@ export default function TaskDetailPage() {
                 github_token: githubToken
             });
 
-            alert(`Pull request created successfully! #${response.pr_number}`);
+            toast.dismiss();
+            toast.success(`Pull request #${response.pr_number} created successfully!`);
+            
+            // Refresh task data to show the new PR info
+            await loadTask();
+            
+            // Open the PR in a new tab
             window.open(response.pr_url, '_blank');
         } catch (error) {
-            alert(`Error creating PR: ${error}`);
+            toast.dismiss();
+            toast.error(`Failed to create PR: ${error}`);
+        } finally {
+            setCreatingPR(false);
         }
     };
 
@@ -216,10 +232,23 @@ export default function TaskDetailPage() {
                                 </div>
                             </div>
                             {task.status === "completed" && (
-                                <Button onClick={handleCreatePR} className="gap-2">
-                                    <ExternalLink className="w-4 h-4" />
-                                    Create PR
-                                </Button>
+                                task.pr_url ? (
+                                    <Button asChild variant="outline" className="gap-2">
+                                        <a href={task.pr_url} target="_blank" rel="noopener noreferrer">
+                                            <ExternalLink className="w-4 h-4" />
+                                            View PR #{task.pr_number}
+                                        </a>
+                                    </Button>
+                                ) : (
+                                    <Button onClick={handleCreatePR} disabled={creatingPR} className="gap-2">
+                                        {creatingPR ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <ExternalLink className="w-4 h-4" />
+                                        )}
+                                        {creatingPR ? "Creating PR..." : "Create PR"}
+                                    </Button>
+                                )
                             )}
                         </div>
                     </div>
