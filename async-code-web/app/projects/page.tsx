@@ -43,7 +43,7 @@ export default function ProjectsPage() {
         
         try {
             setLoading(true);
-            const data = await ApiService.getProjects(user.id);
+            const data = await ApiService.getProjects();
             setProjects(data);
         } catch (error) {
             console.error('Error loading projects:', error);
@@ -58,7 +58,7 @@ export default function ProjectsPage() {
         if (!user?.id) return;
         
         try {
-            await ApiService.createProject(user.id, {
+            await ApiService.createProject({
                 name: formData.name,
                 description: formData.description,
                 repo_url: formData.repo_url
@@ -81,7 +81,7 @@ export default function ProjectsPage() {
         }
 
         try {
-            await ApiService.deleteProject(user.id, id);
+            await ApiService.deleteProject(id);
             loadProjects();
         } catch (error) {
             console.error('Error deleting project:', error);

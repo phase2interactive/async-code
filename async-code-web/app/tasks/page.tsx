@@ -73,7 +73,7 @@ export default function TasksPage() {
             setLoading(true);
             const [taskData, projectData] = await Promise.all([
                 SupabaseService.getTasks(),
-                ApiService.getProjects(user.id)
+                ApiService.getProjects()
             ]);
 
             // Enhance tasks with project data

@@ -217,3 +217,13 @@ class DatabaseOperations:
         except Exception as e:
             logger.error(f"Error migrating legacy task: {e}")
             raise
+    
+    @staticmethod
+    def get_user_by_id(user_id: str) -> Optional[Dict]:
+        """Get user by ID"""
+        try:
+            result = supabase.table('users').select('*').eq('id', user_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Error getting user by ID: {e}")
+            return None

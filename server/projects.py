@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 import logging
 from database import DatabaseOperations
 import re
+from auth import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +28,11 @@ def parse_github_url(repo_url: str):
     raise ValueError(f"Invalid GitHub URL format: {repo_url}")
 
 @projects_bp.route('/projects', methods=['GET'])
+@require_auth
 def get_projects():
     """Get all projects for the authenticated user"""
     try:
-        # For now, we'll use a dummy user_id. In production, this should come from JWT token
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         projects = DatabaseOperations.get_user_projects(user_id)
         return jsonify({
@@ -46,14 +45,12 @@ def get_projects():
         return jsonify({'error': str(e)}), 500
 
 @projects_bp.route('/projects', methods=['POST'])
+@require_auth
 def create_project():
     """Create a new project"""
     try:
         data = request.get_json()
-        user_id = request.headers.get('X-User-ID')
-        
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -95,12 +92,11 @@ def create_project():
         return jsonify({'error': str(e)}), 500
 
 @projects_bp.route('/projects/<int:project_id>', methods=['GET'])
+@require_auth
 def get_project(project_id):
     """Get a specific project"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         project = DatabaseOperations.get_project_by_id(project_id, user_id)
         if not project:
@@ -116,14 +112,12 @@ def get_project(project_id):
         return jsonify({'error': str(e)}), 500
 
 @projects_bp.route('/projects/<int:project_id>', methods=['PUT'])
+@require_auth
 def update_project(project_id):
     """Update a project"""
     try:
         data = request.get_json()
-        user_id = request.headers.get('X-User-ID')
-        
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -151,12 +145,11 @@ def update_project(project_id):
         return jsonify({'error': str(e)}), 500
 
 @projects_bp.route('/projects/<int:project_id>', methods=['DELETE'])
+@require_auth
 def delete_project(project_id):
     """Delete a project"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         success = DatabaseOperations.delete_project(project_id, user_id)
         if not success:
@@ -172,12 +165,11 @@ def delete_project(project_id):
         return jsonify({'error': str(e)}), 500
 
 @projects_bp.route('/projects/<int:project_id>/tasks', methods=['GET'])
+@require_auth
 def get_project_tasks(project_id):
     """Get all tasks for a specific project"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
         
         # Verify project exists and belongs to user
         project = DatabaseOperations.get_project_by_id(project_id, user_id)

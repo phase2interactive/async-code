@@ -12,6 +12,10 @@ from tasks import tasks_bp
 from projects import projects_bp
 from health import health_bp
 
+# Import auth module
+from auth import generate_tokens, refresh_access_token, require_auth
+import jwt
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,6 +53,54 @@ def after_request(response):
 app.register_blueprint(health_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(projects_bp)
+
+# Authentication endpoints
+@app.route('/api/auth/token', methods=['POST'])
+def create_token():
+    """Generate JWT tokens for authenticated Supabase user"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'error': 'user_id is required'}), 400
+        
+        # Generate tokens
+        tokens = generate_tokens(user_id)
+        return jsonify(tokens), 200
+        
+    except Exception as e:
+        logger.error(f"Error creating token: {e}")
+        return jsonify({'error': 'Failed to create token'}), 500
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def refresh_token():
+    """Refresh access token using refresh token"""
+    try:
+        data = request.get_json()
+        refresh_token = data.get('refresh_token')
+        
+        if not refresh_token:
+            return jsonify({'error': 'refresh_token is required'}), 400
+        
+        # Generate new access token
+        result = refresh_access_token(refresh_token)
+        return jsonify(result), 200
+        
+    except jwt.InvalidTokenError as e:
+        return jsonify({'error': str(e)}), 401
+    except Exception as e:
+        logger.error(f"Error refreshing token: {e}")
+        return jsonify({'error': 'Failed to refresh token'}), 500
+
+@app.route('/api/auth/verify', methods=['GET'])
+@require_auth
+def verify_token():
+    """Verify the current token is valid"""
+    return jsonify({
+        'valid': True,
+        'user_id': request.user_id
+    }), 200
 
 @app.errorhandler(404)
 def not_found(error):
