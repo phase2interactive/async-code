@@ -1,0 +1,229 @@
+# Async Code - Multi-Agent Code Task Management System
+Product Requirements Document
+
+## Executive Summary
+
+Async Code is a multi-agent code task management system that allows users to create, manage, and execute AI-powered coding tasks. The system orchestrates multiple AI agents (Claude Code and Codex) running in isolated Docker containers to work on software development tasks autonomously.
+
+## Current State & Critical Issues
+
+The system is currently deployed but has severe security vulnerabilities that must be addressed before any new features are developed:
+
+1. **Authentication Bypass**: The system accepts unverified user IDs, allowing complete user impersonation
+2. **Container Escape Risk**: Docker containers run with privileged access, allowing root access to host
+3. **Command Injection**: User prompts are inadequately escaped, allowing remote code execution
+4. **Exposed Secrets**: Service keys and tokens are hardcoded and stored in plaintext
+
+## System Architecture
+
+### Frontend (Next.js + TypeScript)
+- Task management UI for creating and monitoring AI coding tasks
+- Project organization and task grouping
+- Code diff visualization using CodeMirror
+- Supabase authentication integration
+- Real-time task status updates
+
+### Backend API (Flask + Python)
+- RESTful API for task and project management
+- Docker container orchestration for AI agents
+- Git repository integration
+- Task execution monitoring and result storage
+- Database operations with Supabase
+
+### AI Agent Execution
+- Containerized execution environment for each task
+- Support for multiple AI models (Claude Code, Codex)
+- Automatic repository cloning and branch management
+- Change tracking and patch generation
+- Chat history and progress logging
+
+## Critical Security Requirements (Phase 1 - Immediate)
+
+### Authentication System Overhaul
+- Implement JWT-based authentication with proper validation
+- Remove X-User-ID header vulnerability
+- Add comprehensive auth middleware to all endpoints
+- Update frontend to use secure authentication tokens
+- Implement proper error handling for auth failures
+
+### Container Security Hardening
+- Remove privileged container access
+- Implement proper security policies (seccomp, AppArmor)
+- Remove host PID namespace access
+- Prevent Docker socket mounting in containers
+- Add resource limits and isolation
+
+### Input Validation & Injection Prevention
+- Fix command injection vulnerabilities in shell command execution
+- Implement comprehensive input validation using Pydantic
+- Add proper escaping for all user inputs
+- Validate and sanitize all API parameters
+
+### Secrets Management
+- Remove all hardcoded secrets from codebase
+- Implement encrypted storage for GitHub tokens
+- Use environment variables for sensitive configuration
+- Add secrets rotation capability
+
+## High Priority Security Requirements (Phase 2)
+
+### API Security
+- Implement rate limiting (10 tasks/hour, 100 API calls/minute)
+- Fix CORS configuration to prevent wildcard subdomain matching
+- Add CSRF protection to all state-changing operations
+- Implement XSS protection for user-generated content
+
+### Security Infrastructure
+- Add comprehensive security headers (CSP, X-Frame-Options, etc.)
+- Implement structured logging for security events
+- Add monitoring and alerting for suspicious activities
+- Create security audit trail
+
+## Core Functional Requirements (Phase 3)
+
+### Task Management
+- Create and store AI coding tasks with metadata
+- Execute tasks in isolated Docker containers
+- Track task progress and status in real-time
+- Store results, patches, and chat history
+- Support task dependencies and sequencing
+
+### Git Integration
+- Clone repositories with provided credentials
+- Create and manage feature branches
+- Generate commits with AI-authored changes
+- Create pull requests with generated descriptions
+- Support multiple Git providers
+
+### Container Management
+- Spawn containers with configurable resource limits
+- Monitor container health and status
+- Automatic cleanup of orphaned containers
+- Support multiple AI agent images
+- Container logging and debugging
+
+### Project Organization
+- Group related tasks into projects
+- Track project-level progress
+- Support multiple repositories per project
+- Project templates and presets
+
+## Quality Requirements (Phase 4)
+
+### Testing & Reliability
+- Achieve 80% code coverage with unit tests
+- Implement integration tests for critical paths
+- Add end-to-end tests for user workflows
+- Security-focused test suite
+
+### Code Quality
+- Refactor large files (>1000 lines) into modules
+- Implement consistent error handling
+- Add comprehensive type hints
+- Follow PEP8 and ESLint standards
+
+### Performance
+- Optimize frontend rendering and state management
+- Implement caching for frequently accessed data
+- Add pagination for large datasets
+- Minimize container startup time
+
+### Documentation
+- Create OpenAPI/Swagger documentation
+- Add inline code documentation
+- Create user guides and tutorials
+- Document deployment procedures
+
+## Technical Constraints
+
+### Infrastructure
+- Docker daemon required for container operations
+- Supabase for database and authentication
+- Support for Linux environments
+- Minimum 4GB RAM per container
+
+### Security
+- All containers must run as non-root users
+- Network isolation between containers
+- No direct host filesystem access
+- Audit logging for all operations
+
+### Scalability
+- Support up to 5 concurrent tasks per user
+- Handle 100+ active users
+- Container pool management
+- Queue system for task scheduling
+
+## Success Metrics
+
+### Security
+- Zero authentication bypass vulnerabilities
+- No container escape possibilities
+- Pass security audit and penetration testing
+- Compliance with OWASP Top 10
+
+### Performance
+- Task creation < 2 seconds
+- Container startup < 30 seconds
+- Frontend load time < 3 seconds
+- 99.9% API availability
+
+### User Experience
+- Task success rate > 90%
+- Clear error messages and recovery
+- Intuitive UI with minimal learning curve
+- Real-time progress visibility
+
+## Implementation Roadmap
+
+### Week 1: Critical Security
+- Fix authentication vulnerability (16 hours)
+- Remove container privileges (6 hours)
+- Fix command injection (4 hours)
+- Secure secrets management (4 hours)
+
+### Week 2: High Priority Security
+- Implement rate limiting (8 hours)
+- Fix CORS configuration (4 hours)
+- Add input validation (8 hours)
+- Encrypt sensitive data (6 hours)
+
+### Week 3: Additional Security
+- Add CSRF protection (6 hours)
+- Implement XSS prevention (6 hours)
+- Add security headers (4 hours)
+- Implement logging (8 hours)
+
+### Week 4: Quality & Testing
+- Write unit tests (16 hours)
+- Refactor large files (12 hours)
+- Add error boundaries (4 hours)
+
+### Week 5: Performance & Documentation
+- Optimize frontend (8 hours)
+- Create API documentation (6 hours)
+- Performance testing (4 hours)
+
+## Future Enhancements
+
+### Advanced Features
+- Multi-agent collaboration on single task
+- AI model selection per task
+- Custom agent configurations
+- Task templates and automation
+
+### Integration
+- CI/CD pipeline integration
+- IDE plugins and extensions
+- Webhook notifications
+- Third-party service integrations
+
+### Analytics
+- Task performance metrics
+- AI agent effectiveness tracking
+- Cost optimization insights
+- Usage analytics dashboard
+
+## Conclusion
+
+Async Code has the potential to revolutionize AI-assisted software development, but critical security vulnerabilities must be addressed immediately. The phased approach prioritizes security fixes while maintaining a path toward feature enhancement and scalability. Success depends on rigorous security implementation, comprehensive testing, and a focus on user experience throughout the development process.
