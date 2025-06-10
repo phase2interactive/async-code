@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # Test Database - PostgreSQL
+  test-db:
+    image: postgres:15-alpine
+    container_name: async-code-test-db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Test Supabase - Kong Gateway
+  test-kong:
+    image: kong:3.3
+    container_name: async-code-test-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000"  # Test API Gateway
+      - "8001:8001"  # Kong Admin API
+    networks:
+      - test-network
+    depends_on:
+      test-db:
+        condition: service_healthy
+
+  # Test Backend Service
+  backend-test:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: async-code-backend-test
+    ports:
+      - "5001:5000"  # Different port for testing
+    environment:
+      - FLASK_ENV=test
+      - FLASK_DEBUG=False
+      - ENVIRONMENT=test
+      - ENABLE_TEST_USERS=true
+      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/test_db
+    env_file:
+      - .env.test
+    volumes:
+      - ./server:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - test-network
+    depends_on:
+      test-db:
+        condition: service_healthy
+      claude-automation-test-build:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Test Frontend Service
+  frontend-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: async-code-frontend-test
+    ports:
+      - "3001:3000"  # Different port for testing
+    environment:
+      - NODE_ENV=test
+      - NEXT_PUBLIC_API_URL=http://backend-test:5000
+    env_file:
+      - ./async-code-web/.env.test
+    volumes:
+      - ./async-code-web:/app
+      - /app/node_modules
+    networks:
+      - test-network
+    depends_on:
+      backend-test:
+        condition: service_healthy
+
+  # Claude Automation Test Build
+  claude-automation-test-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.claude-automation
+      tags:
+        - claude-code-automation-test:latest
+    container_name: claude-automation-test-build
+    command: ["echo", "Claude Code test automation image built"]
+    networks:
+      - test-network
+
+# Isolated volumes for test environment
+volumes:
+  test_postgres_data:
+    name: async-code-test-postgres-data
+
+# Isolated network for test environment
+networks:
+  test-network:
+    name: async-code-test-network
+    driver: bridge
