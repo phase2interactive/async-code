@@ -1,0 +1,27 @@
+FROM docker:24-dind
+
+# Install Python and Flask dependencies
+RUN apk add --no-cache python3 py3-pip curl
+
+# Create app directory
+WORKDIR /app
+
+# Copy server requirements and install
+COPY server/requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy server code
+COPY server/ .
+
+# Create non-root user for Flask
+RUN adduser -D -u 1000 flaskuser && \
+    chown -R flaskuser:flaskuser /app
+
+# Switch to non-root user
+USER flaskuser
+
+# Expose Flask port
+EXPOSE 5000
+
+# Start Flask app
+CMD ["python3", "main.py"]

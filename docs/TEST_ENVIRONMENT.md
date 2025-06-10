@@ -10,6 +10,10 @@ The test environment provides complete isolation from production systems using:
 - Separate network (`async-code-test-network`)
 - Test-specific environment variables (`.env.test`)
 - Dedicated volumes for test data
+- Docker-in-Docker for secure container execution
+- Automatic credential generation for enhanced security
+- Resource limits to prevent excessive consumption
+- Kong API Gateway with test-specific configuration
 
 ## Quick Start
 
@@ -73,12 +77,15 @@ This will prompt whether to remove test data volumes.
 ### Container Names
 - `async-code-test-db` - PostgreSQL database
 - `async-code-test-kong` - API Gateway
+- `async-code-test-docker` - Docker-in-Docker service
 - `async-code-backend-test` - Backend API
 - `async-code-frontend-test` - Frontend application
 - `test-ai-code-task-*` - Test task containers
 
 ### Volumes
 - `async-code-test-postgres-data` - Test database data
+- `async-code-test-docker-certs-ca` - Docker TLS CA certificates
+- `async-code-test-docker-certs-client` - Docker TLS client certificates
 
 ### Networks
 - `async-code-test-network` - Isolated bridge network
@@ -86,15 +93,16 @@ This will prompt whether to remove test data volumes.
 ## Environment Variables
 
 Test-specific variables are defined in:
-- `.env.test` - Backend test configuration
+- `.env.test` - Backend test configuration (auto-generated with secure credentials)
 - `async-code-web/.env.test` - Frontend test configuration
 
 Key differences from production:
 - `ENVIRONMENT=test`
 - `ENABLE_TEST_USERS=true`
-- Test-specific database credentials
-- Test JWT secret
+- Randomly generated database credentials
+- Randomly generated JWT secret
 - Different service ports
+- Docker-in-Docker configuration for secure container execution
 
 ## Health Checks
 
@@ -110,6 +118,9 @@ All services include health checks:
 3. **Volume Isolation**: Separate data volumes
 4. **Environment Isolation**: Test-specific configurations
 5. **Container Prefix**: Test containers use `test-` prefix
+6. **Docker-in-Docker**: Secure container execution without host socket mounting
+7. **Resource Limits**: CPU and memory constraints on all containers
+8. **Credential Security**: Randomly generated passwords and secrets
 
 ## Troubleshooting
 
