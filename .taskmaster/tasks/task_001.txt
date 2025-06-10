@@ -1,0 +1,11 @@
+# Task ID: 1
+# Title: Implement JWT-based Authentication System
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Replace the vulnerable X-User-ID header authentication with secure JWT-based authentication
+# Details:
+Create JWT token generation and validation middleware. Implement token refresh mechanism. Remove X-User-ID header dependency. Use libraries like PyJWT for Python backend and jose for frontend. Store tokens securely in httpOnly cookies or secure localStorage with proper expiration.
+
+# Test Strategy:
+Unit tests for token generation/validation, integration tests for auth middleware, security tests for token tampering attempts

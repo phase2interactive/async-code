@@ -1,0 +1,11 @@
+# Task ID: 23
+# Title: Add Container Resource Management
+# Status: pending
+# Dependencies: 21
+# Priority: medium
+# Description: Implement resource limits, monitoring, and cleanup for AI agent containers
+# Details:
+Set CPU and memory limits per container. Implement resource monitoring and alerting. Add automatic cleanup of orphaned containers. Create container health checks. Implement graceful container shutdown.
+
+# Test Strategy:
+Performance tests for resource limits, reliability tests for cleanup, monitoring tests for resource usage

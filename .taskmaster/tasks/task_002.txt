@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: Remove Container Privileged Access
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Eliminate privileged Docker container execution to prevent container escape vulnerabilities
+# Details:
+Update Docker container configurations to run as non-root user. Remove --privileged flag from docker run commands. Implement proper user mapping with --user flag. Create dedicated non-root user in container images. Remove host PID namespace access.
+
+# Test Strategy:
+Security tests to verify containers cannot access host resources, functional tests to ensure AI agents still work properly

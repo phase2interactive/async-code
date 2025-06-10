@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.roo/*
+.roomodes
+.cursor/
+.windsurfrules
 # C extensions
 *.so
 

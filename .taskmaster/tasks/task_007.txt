@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Implement Rate Limiting System
+# Status: pending
+# Dependencies: 5
+# Priority: high
+# Description: Add rate limiting to prevent abuse with 10 tasks/hour and 100 API calls/minute limits
+# Details:
+Use Flask-Limiter with Redis backend for distributed rate limiting. Implement sliding window algorithm. Add different limits for authenticated vs anonymous users. Create rate limit headers in responses. Implement graceful degradation.
+
+# Test Strategy:
+Load tests to verify rate limiting works, functional tests for different user tiers, integration tests with Redis
