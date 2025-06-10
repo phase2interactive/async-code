@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, make_response, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import logging
 import os
 from dotenv import load_dotenv
@@ -11,6 +13,7 @@ load_dotenv()
 from tasks import tasks_bp
 from projects import projects_bp
 from health import health_bp
+from test_users import test_users_bp
 
 # Import auth module
 from auth import generate_tokens, refresh_access_token, require_auth
@@ -28,6 +31,14 @@ CORS(app,
      allow_headers=['Content-Type', 'X-User-ID', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      supports_credentials=True)
+
+# Initialize rate limiter (only for test endpoints)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per hour"],
+    storage_uri="memory://"
+)
 
 # Add explicit OPTIONS handler
 @app.before_request
@@ -53,6 +64,17 @@ def after_request(response):
 app.register_blueprint(health_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(projects_bp)
+
+# Register test user endpoints (only in non-production)
+if os.environ.get("ENVIRONMENT") != "production":
+    app.register_blueprint(test_users_bp, url_prefix='/api')
+    
+    # Apply rate limiting to test endpoints
+    limiter.limit("10 per hour")(test_users_bp.route('/test-users', methods=['POST']))
+    limiter.limit("20 per hour")(test_users_bp.route('/test-users/<user_id>', methods=['DELETE']))
+    limiter.limit("60 per hour")(test_users_bp.route('/test-users', methods=['GET']))
+    limiter.limit("5 per hour")(test_users_bp.route('/test-users/cleanup', methods=['POST']))
+    limiter.limit("30 per hour")(test_users_bp.route('/test-users/<user_id>/token', methods=['POST']))
 
 # Authentication endpoints
 @app.route('/api/auth/token', methods=['POST'])
