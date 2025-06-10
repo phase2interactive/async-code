@@ -1,0 +1,11 @@
+# Task ID: 20
+# Title: Implement Code Diff Visualization
+# Status: pending
+# Dependencies: 19
+# Priority: medium
+# Description: Create CodeMirror-based interface for viewing AI-generated code changes
+# Details:
+Integrate CodeMirror with diff highlighting. Implement side-by-side and unified diff views. Add syntax highlighting for multiple languages. Create interactive diff navigation. Add code folding and search functionality.
+
+# Test Strategy:
+Unit tests for diff components, visual regression tests, functional tests for different file types

@@ -1,0 +1,11 @@
+# Task ID: 10
+# Title: Add CSRF Protection
+# Status: pending
+# Dependencies: 5
+# Priority: medium
+# Description: Implement CSRF tokens for all state-changing operations
+# Details:
+Use Flask-WTF for CSRF protection. Generate and validate CSRF tokens. Add tokens to all forms and AJAX requests. Implement double-submit cookie pattern. Create CSRF error handling.
+
+# Test Strategy:
+Security tests for CSRF attacks, functional tests for legitimate operations, integration tests with frontend

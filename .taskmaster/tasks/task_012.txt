@@ -1,0 +1,11 @@
+# Task ID: 12
+# Title: Add Security Headers
+# Status: pending
+# Dependencies: 11
+# Priority: medium
+# Description: Implement comprehensive security headers including CSP and X-Frame-Options
+# Details:
+Add Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security headers. Use Flask-Talisman for header management. Configure CSP for inline scripts and styles. Add HSTS for HTTPS enforcement.
+
+# Test Strategy:
+Security scanning tools to verify headers, browser tests for CSP enforcement, functional tests for legitimate content

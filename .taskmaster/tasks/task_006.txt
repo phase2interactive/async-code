@@ -1,0 +1,11 @@
+# Task ID: 6
+# Title: Implement Container Security Policies
+# Status: pending
+# Dependencies: 2
+# Priority: high
+# Description: Add seccomp and AppArmor security policies to restrict container capabilities
+# Details:
+Create custom seccomp profiles restricting system calls. Implement AppArmor profiles for container isolation. Add resource limits (CPU, memory, disk). Remove Docker socket mounting. Use read-only root filesystem where possible.
+
+# Test Strategy:
+Security tests for policy enforcement, functional tests to ensure AI agents work within constraints, performance tests for resource limits

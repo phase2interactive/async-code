@@ -1,0 +1,11 @@
+# Task ID: 8
+# Title: Fix CORS Configuration
+# Status: pending
+# Dependencies: 5
+# Priority: high
+# Description: Replace wildcard CORS configuration with specific domain whitelist
+# Details:
+Configure Flask-CORS with specific allowed origins. Remove wildcard (*) origins. Add environment-based CORS configuration. Implement preflight request handling. Add proper credentials handling.
+
+# Test Strategy:
+Browser-based tests for CORS policies, security tests for origin validation, functional tests for legitimate requests
