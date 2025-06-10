@@ -73,6 +73,26 @@ cd async-code-web && npm run dev  # Frontend
 cd server && python main.py      # Backend
 ```
 
+## Testing
+
+The project includes a comprehensive test user system for automated testing:
+
+- **Test User Management**: Automated test user creation with JWT authentication
+- **Local Git Repositories**: Tests use local repos in `/tmp/test-repos/` to avoid external dependencies
+- **Isolated Test Environment**: Complete separation from production data
+- **Automated Cleanup**: Test data automatically cleaned up after 1 hour
+
+```bash
+# Run tests with test profile
+docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+
+# Run Playwright E2E tests
+cd async-code-web && npm run test:e2e
+
+# Run backend unit tests
+cd server && pytest
+```
+
 
 ## License
 
