@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "generatedAt": "2025-06-10T21:03:06.288Z",
+    "tasksAnalyzed": 12,
+    "totalTasks": 43,
+    "analysisCount": 12,
+    "thresholdScore": 4,
+    "projectName": "Taskmaster",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 32,
+      "taskTitle": "Create Test User Management Service",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the TestUserService implementation into: service class structure and initialization, user creation with Supabase integration, JWT token generation methods, user deletion and cleanup functionality, and error handling with validation logic.",
+      "reasoning": "Moderate complexity due to Supabase integration, JWT handling, and critical system stability requirements. Multiple distinct components need careful implementation."
+    },
+    {
+      "taskId": 33,
+      "taskTitle": "Implement Local Git Repository Factory",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Decompose the GitRepositoryFactory into: factory class design and initialization, repository creation and directory management, git operations implementation (init, add, commit), file content seeding and management, URL generation for file:// protocol, and cleanup mechanisms for old repositories.",
+      "reasoning": "High complexity involving file system operations, git command execution, URL handling, and cleanup logic. Multiple integration points with potential failure scenarios."
+    },
+    {
+      "taskId": 34,
+      "taskTitle": "Build Test Data Cleanup Scheduler",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Break down the cleanup scheduler into: scheduler service architecture and configuration, TTL tracking and timestamp management, user cleanup implementation, repository cleanup implementation, cron job or background task setup, and logging with error recovery mechanisms.",
+      "reasoning": "High complexity due to scheduling mechanisms, TTL management, multiple cleanup targets, and critical error recovery requirements."
+    },
+    {
+      "taskId": 35,
+      "taskTitle": "Create Seed Scripts Framework",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Decompose the seed framework into: SeedDataManager class structure and core methods, JSON fixture design and management, idempotent operation implementation with upsert patterns, test scenario support and data versioning, and fixture file organization in tests/fixtures/ directory.",
+      "reasoning": "Moderate-high complexity requiring idempotent operations, data relationship management, and multiple test scenario support."
+    },
+    {
+      "taskId": 36,
+      "taskTitle": "Implement JWT Authentication for Tests",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down JWT authentication into: JWT token generation with test-specific claims, token validation and security checks, token refresh mechanism for long-running tests, and secure token storage in test context.",
+      "reasoning": "Moderate complexity focused on JWT operations with security considerations and test-specific requirements."
+    },
+    {
+      "taskId": 37,
+      "taskTitle": "Setup Docker Compose Test Profile",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Decompose Docker setup into: docker-compose.test.yml configuration with services definition, environment variable and volume isolation setup, health checks and service dependency configuration, and startup/teardown script creation.",
+      "reasoning": "Moderate complexity involving Docker configuration, environment isolation, and service orchestration."
+    },
+    {
+      "taskId": 38,
+      "taskTitle": "Update Playwright Test Configuration",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down Playwright updates into: playwright.config.js test environment configuration, TestAuthHelper class for automated login, page object updates for file:// URL support, test data factory implementation, and parallel execution setup with data isolation.",
+      "reasoning": "Moderate-high complexity due to test framework integration, authentication automation, and parallel execution requirements."
+    },
+    {
+      "taskId": 39,
+      "taskTitle": "Create Test Environment Setup Scripts",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Decompose setup scripts into: setup-test-env.sh script with Docker and database initialization, teardown-test-env.sh cleanup script, environment validation and health checks, error handling and rollback mechanisms, CI environment compatibility, and script idempotency implementation.",
+      "reasoning": "High complexity involving multiple system components, error handling, environment compatibility, and critical setup/teardown operations."
+    },
+    {
+      "taskId": 40,
+      "taskTitle": "Implement Row-Level Security for Test Data",
+      "complexityScore": 9,
+      "recommendedSubtasks": 7,
+      "expansionPrompt": "Break down RLS implementation into: database schema analysis and RLS policy design, test_mode column or role-based filtering implementation, RLS policies for users, projects, tasks, and repositories tables, database functions for test user identification and mode management, migration scripts for RLS setup, policy testing and validation, and security audit and documentation.",
+      "reasoning": "Very high complexity involving database security, multiple table policies, migration management, and critical data isolation requirements."
+    },
+    {
+      "taskId": 41,
+      "taskTitle": "Build GitHub Actions CI/CD Workflow",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Decompose CI/CD workflow into: workflow file structure and job definition, test environment setup and configuration, test execution jobs (unit and e2e), test result reporting and artifact collection, and failure recovery with cleanup procedures.",
+      "reasoning": "Moderate-high complexity involving CI/CD orchestration, multiple job types, artifact management, and failure handling."
+    },
+    {
+      "taskId": 42,
+      "taskTitle": "Create Test Helper Utilities and Factories",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down test helpers into: TestHelpers module structure with core utility functions, data factory implementation for consistent object generation, assertion helpers and custom matchers, and test data relationship and dependency management.",
+      "reasoning": "Moderate complexity focused on utility function design, data consistency, and test support infrastructure."
+    },
+    {
+      "taskId": 43,
+      "taskTitle": "Implement Pre-commit Hooks and Validation",
+      "complexityScore": 5,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Decompose pre-commit setup into: .pre-commit-config.yaml configuration with hook definitions, test validation script for smoke tests, code quality hooks (lint, type-check, format), and hook bypass mechanism for emergency commits.",
+      "reasoning": "Moderate complexity involving hook configuration, validation scripts, and development workflow integration."
+    }
+  ]
+}
