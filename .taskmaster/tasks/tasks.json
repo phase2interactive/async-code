@@ -395,14 +395,247 @@
     {
       "id": 31,
       "title": "Implement Test User System for Playwright E2E Testing",
-      "description": "Create a comprehensive test user management system for Playwright end-to-end tests that handles authentication, database seeding, and Git operations in an isolated test environment",
-      "details": "## Overview\nImplement a robust test user system that allows Playwright tests to run with proper authentication, database access, and Git operations without affecting production data or requiring real GitHub credentials.\n\n## Current Challenges\n1. **Authentication**: Tests need Supabase auth sessions to generate JWT tokens\n2. **External Dependencies**: GitHub API requires real tokens and has rate limits\n3. **Data Isolation**: Test data must not interfere with production\n4. **Cleanup**: Test artifacts need automatic cleanup\n5. **Reproducibility**: Tests must be deterministic and repeatable\n\n## Proposed Solution\n\n### 1. Test User Service (server/test_utils/test_user_service.py)\n```python\nclass TestUserService:\n    def create_test_user(email: str) -> dict:\n        # Use Supabase service role to create user\n        # Bypass email verification\n        # Return user object with ID\n    \n    def generate_jwt_tokens(user_id: str) -> dict:\n        # Generate JWT tokens for test user\n        # Use same logic as production auth.py\n        \n    def cleanup_test_user(user_id: str):\n        # Delete user and all associated data\n        # Clean up projects, tasks, etc.\n```\n\n### 2. Git Mock Service (server/test_utils/git_mock_service.py)\n```python\nclass GitMockService:\n    def create_test_repo(repo_name: str) -> str:\n        # Create local Git repo in /tmp/test-repos/\n        # Initialize with sample files\n        # Return repo path (file:// URL)\n        \n    def cleanup_test_repos():\n        # Remove all test repositories\n```\n\n### 3. Seed Script (scripts/seed_test_data.py)\n```python\n# Creates consistent test environment:\n# - Test user with known credentials\n# - Sample projects and tasks\n# - Local Git repositories\n# - Test-specific Docker containers\n```\n\n### 4. Docker Compose Test Profile (docker-compose.test.yml)\n```yaml\nservices:\n  backend:\n    environment:\n      - TESTING_MODE=true\n      - TEST_USER_EMAIL=test@asynccode.test\n      - BYPASS_GITHUB=true\n    volumes:\n      - ./test-repos:/tmp/test-repos\n```\n\n### 5. Playwright Configuration\n```typescript\n// playwright.config.ts\nexport default defineConfig({\n  globalSetup: './tests/global-setup.ts',\n  globalTeardown: './tests/global-teardown.ts',\n  use: {\n    baseURL: 'http://localhost:3000',\n    storageState: 'tests/.auth/user.json', // Persist auth\n  }\n});\n```\n\n### 6. Test Authentication Flow\n```typescript\n// tests/global-setup.ts\nasync function globalSetup() {\n  // 1. Start docker-compose with test profile\n  // 2. Run seed script to create test user\n  // 3. Get JWT tokens via API\n  // 4. Save auth state for reuse\n}\n```\n\n## Implementation Steps\n\n### Phase 1: Test User Infrastructure\n1. Create TestUserService with Supabase user creation\n2. Implement JWT token generation for test users\n3. Add cleanup methods for test data\n4. Create test-specific database schema/tables\n\n### Phase 2: Git Mocking\n1. Implement GitMockService for local repo management\n2. Create sample repositories with test data\n3. Update backend to support file:// Git URLs in test mode\n4. Add cleanup for temporary repositories\n\n### Phase 3: Seed Scripts\n1. Create comprehensive seed_test_data.py script\n2. Generate consistent test projects and tasks\n3. Initialize test Git repositories\n4. Configure test environment variables\n\n### Phase 4: Playwright Integration\n1. Set up global setup/teardown scripts\n2. Implement auth state persistence\n3. Create test helpers for common operations\n4. Add cleanup verification\n\n### Phase 5: CI/CD Integration\n1. Update GitHub Actions to run seed script\n2. Configure test-specific Docker images\n3. Add test result reporting\n4. Implement test parallelization\n\n## Security Considerations\n1. **Never use production credentials in tests**\n2. **Test user emails should use .test TLD (e.g., user@asynccode.test)**\n3. **Store test secrets in separate .env.test file**\n4. **Implement automatic cleanup even if tests fail**\n5. **Use time-based expiration for test data**\n\n## Best Practices\n1. **Idempotent Setup**: Seed script should be re-runnable\n2. **Fast Teardown**: Cleanup should be quick and thorough\n3. **Isolation**: Each test run should be independent\n4. **Deterministic**: Same seed = same test data\n5. **Documentation**: Clear setup instructions for developers\n\n## Environment Variables\n```bash\n# .env.test\nTESTING_MODE=true\nTEST_USER_EMAIL=test@asynccode.test\nTEST_USER_PASSWORD=test-password-123\nTEST_SUPABASE_URL=http://localhost:54321\nTEST_SUPABASE_ANON_KEY=test-anon-key\nTEST_SUPABASE_SERVICE_KEY=test-service-key\nTEST_JWT_SECRET=test-jwt-secret-minimum-32-characters\nBYPASS_GITHUB=true\nTEST_REPOS_PATH=/tmp/test-repos\n```\n\n## Cleanup Strategy\n1. **Immediate**: Clean up after each test suite\n2. **Scheduled**: Cron job to clean orphaned test data\n3. **Time-based**: Auto-expire test data after 1 hour\n4. **Manual**: Provide cleanup command for developers\n\n## Example Test\n```typescript\ntest('create and execute AI task', async ({ page }) => {\n  // Auth state loaded automatically from global setup\n  await page.goto('/');\n  \n  // Create task with local test repo\n  await page.fill('[name=\"repo_url\"]', 'file:///tmp/test-repos/sample-app');\n  await page.fill('[name=\"prompt\"]', 'Add error handling to main function');\n  await page.click('button:has-text(\"Start Task\")');\n  \n  // Verify task execution\n  await expect(page.locator('.task-status')).toHaveText('completed');\n});\n```\n\n## Success Criteria\n1. ✅ Playwright tests run without manual setup\n2. ✅ No production data affected\n3. ✅ No GitHub API calls in test mode\n4. ✅ Tests are fast and reliable\n5. ✅ Easy for new developers to run tests\n6. ✅ Automatic cleanup of all test artifacts",
-      "testStrategy": "1. Unit tests for TestUserService and GitMockService\n2. Integration tests for seed script execution\n3. E2E tests to verify full test flow works\n4. Cleanup verification tests\n5. Performance tests for test setup/teardown time\n6. Security tests to ensure no credential leakage",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Create a comprehensive test user management system for Playwright end-to-end tests that handles authentication, database seeding, and Git operations in an isolated test environment. This is essential for preventing production issues and enabling reliable automated testing.",
       "status": "pending",
       "dependencies": [
         1
       ],
       "priority": "high",
+      "details": "## Overview\n**CRITICAL PRIORITY**: Implement a robust test user system that allows Playwright tests to run with proper authentication, database access, and Git operations without affecting production data or requiring real GitHub credentials. This system is fundamental to maintaining system stability and preventing production incidents.\n\n## Current Challenges\n1. **Authentication**: Tests need Supabase auth sessions to generate JWT tokens\n2. **External Dependencies**: GitHub API requires real tokens and has rate limits\n3. **Data Isolation**: Test data must not interfere with production\n4. **Cleanup**: Test artifacts need automatic cleanup\n5. **Reproducibility**: Tests must be deterministic and repeatable\n\n## Proposed Solution\n\n### 1. Test User Service (server/test_utils/test_user_service.py)\n```python\nclass TestUserService:\n    def create_test_user(email: str) -> dict:\n        # Use Supabase service role to create user\n        # Bypass email verification\n        # Return user object with ID\n    \n    def generate_jwt_tokens(user_id: str) -> dict:\n        # Generate JWT tokens for test user\n        # Use same logic as production auth.py\n        \n    def cleanup_test_user(user_id: str):\n        # Delete user and all associated data\n        # Clean up projects, tasks, etc.\n```\n\n### 2. Git Mock Service (server/test_utils/git_mock_service.py)\n```python\nclass GitMockService:\n    def create_test_repo(repo_name: str) -> str:\n        # Create local Git repo in /tmp/test-repos/\n        # Initialize with sample files\n        # Return repo path (file:// URL)\n        \n    def cleanup_test_repos():\n        # Remove all test repositories\n```\n\n### 3. Seed Script (scripts/seed_test_data.py)\n```python\n# Creates consistent test environment:\n# - Test user with known credentials\n# - Sample projects and tasks\n# - Local Git repositories\n# - Test-specific Docker containers\n```\n\n### 4. Docker Compose Test Profile (docker-compose.test.yml)\n```yaml\nservices:\n  backend:\n    environment:\n      - TESTING_MODE=true\n      - TEST_USER_EMAIL=test@asynccode.test\n      - BYPASS_GITHUB=true\n    volumes:\n      - ./test-repos:/tmp/test-repos\n```\n\n### 5. Playwright Configuration\n```typescript\n// playwright.config.ts\nexport default defineConfig({\n  globalSetup: './tests/global-setup.ts',\n  globalTeardown: './tests/global-teardown.ts',\n  use: {\n    baseURL: 'http://localhost:3000',\n    storageState: 'tests/.auth/user.json', // Persist auth\n  }\n});\n```\n\n### 6. Test Authentication Flow\n```typescript\n// tests/global-setup.ts\nasync function globalSetup() {\n  // 1. Start docker-compose with test profile\n  // 2. Run seed script to create test user\n  // 3. Get JWT tokens via API\n  // 4. Save auth state for reuse\n}\n```\n\n## Implementation Steps\n\n### Phase 1: Test User Infrastructure\n1. Create TestUserService with Supabase user creation\n2. Implement JWT token generation for test users\n3. Add cleanup methods for test data\n4. Create test-specific database schema/tables\n\n### Phase 2: Git Mocking\n1. Implement GitMockService for local repo management\n2. Create sample repositories with test data\n3. Update backend to support file:// Git URLs in test mode\n4. Add cleanup for temporary repositories\n\n### Phase 3: Seed Scripts\n1. Create comprehensive seed_test_data.py script\n2. Generate consistent test projects and tasks\n3. Initialize test Git repositories\n4. Configure test environment variables\n\n### Phase 4: Playwright Integration\n1. Set up global setup/teardown scripts\n2. Implement auth state persistence\n3. Create test helpers for common operations\n4. Add cleanup verification\n\n### Phase 5: CI/CD Integration\n1. Update GitHub Actions to run seed script\n2. Configure test-specific Docker images\n3. Add test result reporting\n4. Implement test parallelization\n\n## Security Considerations\n1. **Never use production credentials in tests**\n2. **Test user emails should use .test TLD (e.g., user@asynccode.test)**\n3. **Store test secrets in separate .env.test file**\n4. **Implement automatic cleanup even if tests fail**\n5. **Use time-based expiration for test data**\n\n## Best Practices\n1. **Idempotent Setup**: Seed script should be re-runnable\n2. **Fast Teardown**: Cleanup should be quick and thorough\n3. **Isolation**: Each test run should be independent\n4. **Deterministic**: Same seed = same test data\n5. **Documentation**: Clear setup instructions for developers\n\n## Environment Variables\n```bash\n# .env.test\nTESTING_MODE=true\nTEST_USER_EMAIL=test@asynccode.test\nTEST_USER_PASSWORD=test-password-123\nTEST_SUPABASE_URL=http://localhost:54321\nTEST_SUPABASE_ANON_KEY=test-anon-key\nTEST_SUPABASE_SERVICE_KEY=test-service-key\nTEST_JWT_SECRET=test-jwt-secret-minimum-32-characters\nBYPASS_GITHUB=true\nTEST_REPOS_PATH=/tmp/test-repos\n```\n\n## Cleanup Strategy\n1. **Immediate**: Clean up after each test suite\n2. **Scheduled**: Cron job to clean orphaned test data\n3. **Time-based**: Auto-expire test data after 1 hour\n4. **Manual**: Provide cleanup command for developers\n\n## Example Test\n```typescript\ntest('create and execute AI task', async ({ page }) => {\n  // Auth state loaded automatically from global setup\n  await page.goto('/');\n  \n  // Create task with local test repo\n  await page.fill('[name=\"repo_url\"]', 'file:///tmp/test-repos/sample-app');\n  await page.fill('[name=\"prompt\"]', 'Add error handling to main function');\n  await page.click('button:has-text(\"Start Task\")');\n  \n  // Verify task execution\n  await expect(page.locator('.task-status')).toHaveText('completed');\n});\n```\n\n## Success Criteria\n1. ✅ Playwright tests run without manual setup\n2. ✅ No production data affected\n3. ✅ No GitHub API calls in test mode\n4. ✅ Tests are fast and reliable\n5. ✅ Easy for new developers to run tests\n6. ✅ Automatic cleanup of all test artifacts",
+      "testStrategy": "1. Unit tests for TestUserService and GitMockService\n2. Integration tests for seed script execution\n3. E2E tests to verify full test flow works\n4. Cleanup verification tests\n5. Performance tests for test setup/teardown time\n6. Security tests to ensure no credential leakage",
+      "subtasks": []
+    },
+    {
+      "id": 32,
+      "title": "Create Test User Management Service",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Implement a service for automated test user creation and management using Supabase service role. This is essential for preventing production data contamination and enabling reliable automated testing.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Create a TestUserService class that uses Supabase service role key to create test users. Implement methods: createTestUser(email='test@asynccode.test'), generateJWTToken(userId), and deleteTestUser(userId). Use environment variables for service role key. Ensure fixed user IDs for predictable testing. Include user validation and error handling. This service is critical for maintaining test isolation and preventing production issues.",
+      "testStrategy": "Unit tests for user creation, JWT generation, and deletion. Mock Supabase client. Verify user data structure and token validity. Test error scenarios like duplicate users and invalid credentials.",
+      "subtasks": []
+    },
+    {
+      "id": 33,
+      "title": "Implement Local Git Repository Factory",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Create a system to generate and manage local Git repositories in /tmp/test-repos/ for testing. This prevents external API dependencies and ensures test reliability.",
+      "status": "pending",
+      "dependencies": [
+        32
+      ],
+      "priority": "high",
+      "details": "Build GitRepositoryFactory class with methods: createRepository(name, template), initializeRepo(path), seedWithContent(path, files), and generateFileUrl(repoName). Store repos in /tmp/test-repos/{repo-name}/. Support file:// URLs instead of https://github.com/. Include git init, add, commit operations. Implement cleanup for old repositories. This is critical for eliminating GitHub API dependencies in tests.",
+      "testStrategy": "Test repository creation, file operations, and URL generation. Verify git operations work correctly. Test cleanup functionality. Mock file system operations where needed. Validate file:// URL format.",
+      "subtasks": []
+    },
+    {
+      "id": 34,
+      "title": "Build Test Data Cleanup Scheduler",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Implement automated cleanup service for test users and repositories with 1-hour TTL. This prevents test data accumulation and ensures system stability.",
+      "status": "pending",
+      "dependencies": [
+        32,
+        33
+      ],
+      "priority": "high",
+      "details": "Create CleanupScheduler service using cron jobs or background tasks. Track creation timestamps for test users and repositories. Implement cleanup methods: cleanupExpiredUsers(), cleanupExpiredRepos(), and scheduleCleanup(). Set TTL to 1 hour. Include logging and error recovery. Use database triggers or scheduled functions. This is essential for preventing test data from accumulating and affecting system performance.",
+      "testStrategy": "Test TTL functionality with mock timestamps. Verify cleanup execution and logging. Test failure recovery scenarios. Mock time progression for faster testing. Validate complete cleanup of users and repositories.",
+      "subtasks": []
+    },
+    {
+      "id": 35,
+      "title": "Create Seed Scripts Framework",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Develop idempotent Python seed scripts for generating test data, projects, and tasks. This ensures consistent test environments and prevents test flakiness.",
+      "status": "pending",
+      "dependencies": [
+        32,
+        33
+      ],
+      "priority": "high",
+      "details": "Build SeedDataManager class with methods: seedProjects(), seedTasks(), seedRepositories(), and resetTestData(). Create JSON fixtures for sample data. Implement idempotent operations using upsert patterns. Include versioning for seed data. Support different test scenarios (empty, basic, complex). Store fixtures in tests/fixtures/ directory. This is critical for maintaining test consistency and reliability.",
+      "testStrategy": "Test idempotent behavior by running seeds multiple times. Verify data consistency and completeness. Test different fixture scenarios. Validate foreign key relationships. Mock database operations for unit tests.",
+      "subtasks": []
+    },
+    {
+      "id": 36,
+      "title": "Implement JWT Authentication for Tests",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Create JWT token generation and validation system specifically for test users. This enables proper authentication in tests without compromising production security.",
+      "status": "pending",
+      "dependencies": [
+        32
+      ],
+      "priority": "high",
+      "details": "Extend TestUserService with JWT methods: generateTestToken(userId, expiresIn), validateTestToken(token), and refreshTestToken(token). Use same JWT secret as production but with test-specific claims. Include token expiration handling. Support long-running tests with refresh capability. Store tokens securely in test context. This is essential for maintaining authentication security in test environments.",
+      "testStrategy": "Test token generation, validation, and refresh. Verify token claims and expiration. Test invalid token scenarios. Mock JWT library functions. Validate token format and security.",
+      "subtasks": []
+    },
+    {
+      "id": 37,
+      "title": "Setup Docker Compose Test Profile",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Create docker-compose.test.yml with isolated test database and environment configuration. This ensures complete isolation from production systems.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Create docker-compose.test.yml with services: test-db (PostgreSQL), test-supabase, and app-test. Use separate database volumes and networks. Configure test-specific environment variables in .env.test. Include health checks and dependency management. Set up quick startup and teardown scripts. Ensure complete isolation from production. This is critical for preventing test interference with production systems.",
+      "testStrategy": "Test container startup and connectivity. Verify environment isolation. Test database migrations and seeding. Validate service dependencies and health checks. Test teardown and cleanup procedures.",
+      "subtasks": []
+    },
+    {
+      "id": 38,
+      "title": "Update Playwright Test Configuration",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Modify Playwright tests to use local repositories and test user authentication. This enables reliable end-to-end testing without external dependencies.",
+      "status": "pending",
+      "dependencies": [
+        32,
+        33,
+        36
+      ],
+      "priority": "high",
+      "details": "Update playwright.config.js to use test environment. Create TestAuthHelper class for login automation. Update page objects to use file:// URLs. Implement test data factories for consistent test setup. Add beforeEach hooks for user authentication. Configure parallel execution with isolated test data. This is essential for maintaining test reliability and preventing production interference.",
+      "testStrategy": "Test authentication flow in Playwright. Verify local repository access. Test parallel execution isolation. Validate page object updates. Test data factory consistency across test runs.",
+      "subtasks": []
+    },
+    {
+      "id": 39,
+      "title": "Create Test Environment Setup Scripts",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Build automated scripts for complete test environment initialization and configuration. This ensures consistent test environments and prevents setup-related failures.",
+      "status": "pending",
+      "dependencies": [
+        34,
+        35,
+        37
+      ],
+      "priority": "high",
+      "details": "Create setup-test-env.sh script that: starts Docker containers, runs database migrations, executes seed scripts, creates test users, and validates environment. Include teardown-test-env.sh for cleanup. Add environment validation checks. Support both local development and CI environments. Include error handling and rollback. This is critical for maintaining consistent test environments across all development stages.",
+      "testStrategy": "Test complete setup and teardown cycles. Verify environment validation. Test error scenarios and rollback. Validate script idempotency. Test in both local and CI environments.",
+      "subtasks": []
+    },
+    {
+      "id": 40,
+      "title": "Implement Row-Level Security for Test Data",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Configure database RLS policies to ensure complete isolation of test data from production. This is essential for preventing data contamination and security breaches.",
+      "status": "pending",
+      "dependencies": [
+        32,
+        37
+      ],
+      "priority": "high",
+      "details": "Create RLS policies for users, projects, tasks, and repositories tables. Implement test_mode column or user role-based filtering. Ensure test users can only access test data. Create database functions: is_test_user(user_id), enable_test_mode(), disable_test_mode(). Include migration scripts for RLS setup. This is critical for maintaining data integrity and security between test and production environments.",
+      "testStrategy": "Test data isolation between test and production users. Verify RLS policy enforcement. Test policy bypass scenarios. Validate migration scripts. Test with different user roles and permissions.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Database Schema Analysis and RLS Policy Design",
+          "description": "Analyze existing database schema to identify security requirements, data relationships, and design comprehensive RLS policy architecture for multi-tenant data isolation",
+          "dependencies": [],
+          "details": "Review current table structures, foreign key relationships, user roles, and data access patterns. Design RLS policy framework including tenant isolation strategies, user permission models, and security boundaries. Document policy hierarchy and interaction patterns.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Test Mode Column and Role-Based Filtering Implementation",
+          "description": "Implement test_mode column infrastructure and role-based filtering mechanisms to support development and production data separation",
+          "dependencies": [
+            1
+          ],
+          "details": "Add test_mode columns to relevant tables, create role-based access control system, implement filtering logic for test vs production data, and establish user role hierarchy with appropriate permissions.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "RLS Policies for Core Tables Implementation",
+          "description": "Create and implement RLS policies for users, projects, tasks, and repositories tables with proper tenant isolation and access controls",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Develop specific RLS policies for each core table ensuring proper data isolation, implement row-level security rules based on user ownership and permissions, create policies for read/write operations, and establish cross-table relationship security.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Database Functions for Test User Identification and Mode Management",
+          "description": "Develop database functions to identify test users, manage test modes, and handle security context switching",
+          "dependencies": [
+            2
+          ],
+          "details": "Create PL/pgSQL functions for test user identification, implement mode switching mechanisms, develop security context management functions, and create helper functions for policy evaluation and debugging.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Migration Scripts for RLS Setup",
+          "description": "Create comprehensive migration scripts to enable RLS, apply policies, and handle data migration with zero downtime",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Develop migration scripts for enabling RLS on tables, applying policies in correct order, handling existing data migration, creating rollback procedures, and ensuring zero-downtime deployment with proper backup strategies.",
+          "status": "pending"
+        },
+        {
+          "id": 6,
+          "title": "Policy Testing and Validation",
+          "description": "Implement comprehensive testing framework for RLS policies including unit tests, integration tests, and security validation",
+          "dependencies": [
+            5
+          ],
+          "details": "Create test suites for each RLS policy, implement automated security testing, develop test scenarios for various user roles and permissions, create performance testing for policy overhead, and establish continuous security validation processes.",
+          "status": "pending"
+        },
+        {
+          "id": 7,
+          "title": "Security Audit and Documentation",
+          "description": "Conduct thorough security audit of RLS implementation and create comprehensive documentation for maintenance and compliance",
+          "dependencies": [
+            6
+          ],
+          "details": "Perform security audit of all RLS policies and implementations, document security architecture and policy decisions, create operational runbooks for RLS management, establish monitoring and alerting for security violations, and prepare compliance documentation.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "title": "Build GitHub Actions CI/CD Workflow",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Create automated testing workflow with test environment setup and result reporting. This ensures continuous integration and prevents regression issues.",
+      "status": "pending",
+      "dependencies": [
+        38,
+        39
+      ],
+      "priority": "high",
+      "details": "Create .github/workflows/test.yml with jobs: setup-test-env, run-unit-tests, run-e2e-tests, and cleanup. Include test result reporting and artifact collection. Set up test database and environment variables. Implement failure recovery and cleanup. Add test coverage reporting and status checks. This is essential for maintaining code quality and preventing production issues through automated testing.",
+      "testStrategy": "Test workflow execution and job dependencies. Verify test result reporting. Test failure scenarios and cleanup. Validate artifact collection. Test in different GitHub environments.",
+      "subtasks": []
+    },
+    {
+      "id": 42,
+      "title": "Create Test Helper Utilities and Factories",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Develop utility functions and data factories for consistent test setup across all test types. This ensures test reliability and reduces maintenance overhead.",
+      "status": "pending",
+      "dependencies": [
+        35,
+        36,
+        38
+      ],
+      "priority": "high",
+      "details": "Create TestHelpers module with functions: createTestProject(), createTestTask(), setupTestRepo(), loginTestUser(), and cleanupTestData(). Implement data factories for generating consistent test objects. Include assertion helpers and custom matchers. Support test data relationships and dependencies. This is critical for maintaining test consistency and reducing test maintenance burden.",
+      "testStrategy": "Test helper function reliability and consistency. Verify data factory outputs. Test cleanup effectiveness. Validate assertion helpers. Test cross-test data consistency.",
+      "subtasks": []
+    },
+    {
+      "id": 43,
+      "title": "Implement Pre-commit Hooks and Validation",
+      "description": "**CRITICAL FOR SYSTEM STABILITY** - Set up pre-commit hooks for test validation and automated quality checks. This prevents broken code from entering the repository and maintains system stability.",
+      "status": "pending",
+      "dependencies": [
+        41
+      ],
+      "priority": "high",
+      "details": "Create .pre-commit-config.yaml with hooks: test-validation, lint-check, type-check, and security-scan. Implement test-validation script that runs quick smoke tests. Include code formatting and import sorting. Add commit message validation. Configure hook bypass for emergency commits. This is essential for maintaining code quality and preventing issues from reaching production.",
+      "testStrategy": "Test pre-commit hook execution and validation. Verify hook bypass functionality. Test with different commit scenarios. Validate performance impact. Test hook installation and updates.",
       "subtasks": []
     }
   ]
