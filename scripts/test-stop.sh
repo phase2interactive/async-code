@@ -32,4 +32,33 @@ docker ps -a --filter "name=test-ai-code-task-" -q | xargs -r docker rm -f || tr
 # Remove test network if it exists
 docker network rm async-code-test-network 2>/dev/null || true
 
+# Cleanup verification
+verify_cleanup() {
+    echo "🔍 Verifying cleanup..."
+    
+    # Check for remaining test containers
+    remaining_containers=$(docker ps -a --filter "name=async-code-test-" --filter "name=test-ai-code-task-" -q | wc -l)
+    if [ $remaining_containers -gt 0 ]; then
+        echo "⚠️  Warning: $remaining_containers test containers still exist"
+        docker ps -a --filter "name=async-code-test-" --filter "name=test-ai-code-task-" --format "table {{.Names}}\t{{.Status}}"
+    fi
+    
+    # Check for remaining test volumes
+    remaining_volumes=$(docker volume ls --filter "name=async-code-test-" -q | wc -l)
+    if [ $remaining_volumes -gt 0 ]; then
+        echo "⚠️  Warning: $remaining_volumes test volumes still exist"
+        docker volume ls --filter "name=async-code-test-"
+    fi
+    
+    # Check for remaining test networks
+    remaining_networks=$(docker network ls --filter "name=async-code-test-" -q | wc -l)
+    if [ $remaining_networks -gt 0 ]; then
+        echo "⚠️  Warning: $remaining_networks test networks still exist"
+        docker network ls --filter "name=async-code-test-"
+    fi
+}
+
+# Run verification
+verify_cleanup
+
 echo "✅ Test environment stopped and cleaned up!"

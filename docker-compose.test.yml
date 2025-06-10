@@ -7,7 +7,7 @@ services:
     container_name: async-code-test-db
     environment:
       POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_password
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-test_password}
       POSTGRES_DB: test_db
     ports:
       - "5433:5432"  # Different port to avoid conflicts
@@ -21,6 +21,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # Test Supabase - Kong Gateway
   test-kong:
@@ -34,6 +42,8 @@ services:
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    volumes:
+      - ./kong.test.yml:/kong.yml:ro
     ports:
       - "8000:8000"  # Test API Gateway
       - "8001:8001"  # Kong Admin API
@@ -42,6 +52,37 @@ services:
     depends_on:
       test-db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Docker-in-Docker service for test container execution
+  test-docker:
+    image: docker:24-dind
+    container_name: async-code-test-docker
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - docker-certs-ca:/certs/ca
+      - docker-certs-client:/certs/client
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "docker", "version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   # Test Backend Service
   backend-test:
@@ -56,16 +97,21 @@ services:
       - FLASK_DEBUG=False
       - ENVIRONMENT=test
       - ENABLE_TEST_USERS=true
-      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/test_db
+      - DATABASE_URL=postgresql://test_user:${TEST_DB_PASSWORD:-test_password}@test-db:5432/test_db
+      - DOCKER_HOST=tcp://test-docker:2376
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
     env_file:
       - .env.test
     volumes:
       - ./server:/app
-      - /var/run/docker.sock:/var/run/docker.sock
+      - docker-certs-client:/certs/client:ro
     networks:
       - test-network
     depends_on:
       test-db:
+        condition: service_healthy
+      test-docker:
         condition: service_healthy
       claude-automation-test-build:
         condition: service_completed_successfully
@@ -75,6 +121,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # Test Frontend Service
   frontend-test:
@@ -97,6 +151,14 @@ services:
     depends_on:
       backend-test:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # Claude Automation Test Build
   claude-automation-test-build:
@@ -114,6 +176,10 @@ services:
 volumes:
   test_postgres_data:
     name: async-code-test-postgres-data
+  docker-certs-ca:
+    name: async-code-test-docker-certs-ca
+  docker-certs-client:
+    name: async-code-test-docker-certs-client
 
 # Isolated network for test environment
 networks:
