@@ -7,20 +7,19 @@ from models import TaskStatus
 from database import DatabaseOperations
 from utils import run_ai_code_task_v2  # Updated function name
 from github import Github
+from auth import require_auth
 
 logger = logging.getLogger(__name__)
 
 tasks_bp = Blueprint('tasks', __name__)
 
 @tasks_bp.route('/start-task', methods=['POST'])
+@require_auth
 def start_task():
     """Start a new Claude Code automation task"""
     try:
         data = request.get_json()
-        user_id = request.headers.get('X-User-ID')
-        
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id  # Get from JWT auth
             
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -75,12 +74,11 @@ def start_task():
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/task-status/<int:task_id>', methods=['GET'])
+@require_auth
 def get_task_status(task_id):
     """Get the status of a specific task"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         task = DatabaseOperations.get_task_by_id(task_id, user_id)
         if not task:
@@ -119,12 +117,11 @@ def get_task_status(task_id):
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/tasks', methods=['GET'])
+@require_auth
 def list_all_tasks():
     """List all tasks for the authenticated user"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         project_id = request.args.get('project_id', type=int)
         tasks = DatabaseOperations.get_user_tasks(user_id, project_id)
@@ -163,12 +160,11 @@ def list_all_tasks():
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/tasks/<int:task_id>', methods=['GET'])
+@require_auth
 def get_task_details(task_id):
     """Get detailed information about a specific task"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         task = DatabaseOperations.get_task_by_id(task_id, user_id)
         if not task:
@@ -184,14 +180,12 @@ def get_task_details(task_id):
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/tasks/<int:task_id>/chat', methods=['POST'])
+@require_auth
 def add_chat_message(task_id):
     """Add a chat message to a task"""
     try:
         data = request.get_json()
-        user_id = request.headers.get('X-User-ID')
-        
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -219,12 +213,11 @@ def add_chat_message(task_id):
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/git-diff/<int:task_id>', methods=['GET'])
+@require_auth
 def get_git_diff(task_id):
     """Get git diff for a task (legacy endpoint for compatibility)"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         task = DatabaseOperations.get_task_by_id(task_id, user_id)
         if not task:
@@ -241,6 +234,7 @@ def get_git_diff(task_id):
         return jsonify({'error': str(e)}), 500
 
 @tasks_bp.route('/validate-token', methods=['POST'])
+@require_auth
 def validate_github_token():
     """Validate GitHub token and check permissions"""
     try:
@@ -338,12 +332,11 @@ def validate_github_token():
         return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
 
 @tasks_bp.route('/create-pr/<int:task_id>', methods=['POST'])
+@require_auth
 def create_pull_request(task_id):
     """Create a pull request by applying the saved patch to a fresh repo clone"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         logger.info(f"🔍 PR creation requested for task: {task_id}")
         
@@ -470,12 +463,11 @@ def create_pull_request(task_id):
 
 # Legacy task migration endpoint
 @tasks_bp.route('/migrate-legacy-tasks', methods=['POST'])
+@require_auth
 def migrate_legacy_tasks():
     """Migrate tasks from legacy JSON storage to Supabase"""
     try:
-        user_id = request.headers.get('X-User-ID')
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        user_id = request.user_id
         
         # This would be called manually to migrate existing tasks
         # Load legacy tasks from file if it exists

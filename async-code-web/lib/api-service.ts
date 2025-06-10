@@ -1,17 +1,19 @@
 import { Project, Task, ProjectWithStats, ChatMessage } from '@/types'
+import { jwtService } from './jwt-service'
 
 const API_BASE = '/api';
 
-// Helper function to get user ID header
-function getUserIdHeader(userId?: string): HeadersInit {
-    return userId ? { 'X-User-ID': userId } : {}
+// Helper function to get auth headers
+function getAuthHeaders(): HeadersInit {
+    const token = jwtService.getAccessToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
 }
 
 export class ApiService {
     // Project operations
-    static async getProjects(userId: string): Promise<Project[]> {
+    static async getProjects(): Promise<Project[]> {
         const response = await fetch(`${API_BASE}/projects`, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (!response.ok) {
@@ -22,7 +24,7 @@ export class ApiService {
         return data.projects || []
     }
 
-    static async createProject(userId: string, projectData: {
+    static async createProject(projectData: {
         name: string
         description?: string
         repo_url: string
@@ -31,7 +33,7 @@ export class ApiService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...getUserIdHeader(userId)
+                ...getAuthHeaders()
             },
             body: JSON.stringify(projectData)
         })
@@ -44,12 +46,12 @@ export class ApiService {
         return data.project
     }
 
-    static async updateProject(userId: string, id: number, updates: Partial<Project>): Promise<Project> {
+    static async updateProject(id: number, updates: Partial<Project>): Promise<Project> {
         const response = await fetch(`${API_BASE}/projects/${id}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                ...getUserIdHeader(userId)
+                ...getAuthHeaders()
             },
             body: JSON.stringify(updates)
         })
@@ -62,10 +64,10 @@ export class ApiService {
         return data.project
     }
 
-    static async deleteProject(userId: string, id: number): Promise<void> {
+    static async deleteProject(id: number): Promise<void> {
         const response = await fetch(`${API_BASE}/projects/${id}`, {
             method: 'DELETE',
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (!response.ok) {
@@ -73,9 +75,9 @@ export class ApiService {
         }
     }
 
-    static async getProject(userId: string, id: number): Promise<Project | null> {
+    static async getProject(id: number): Promise<Project | null> {
         const response = await fetch(`${API_BASE}/projects/${id}`, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (response.status === 404) {
@@ -91,13 +93,13 @@ export class ApiService {
     }
 
     // Task operations
-    static async getTasks(userId: string, projectId?: number): Promise<any[]> {
+    static async getTasks(projectId?: number): Promise<any[]> {
         const url = projectId 
             ? `${API_BASE}/projects/${projectId}/tasks`
             : `${API_BASE}/tasks`
         
         const response = await fetch(url, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (!response.ok) {
@@ -108,9 +110,9 @@ export class ApiService {
         return Object.values(data.tasks || {})
     }
 
-    static async getTask(userId: string, id: number): Promise<Task | null> {
+    static async getTask(id: number): Promise<Task | null> {
         const response = await fetch(`${API_BASE}/tasks/${id}`, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (response.status === 404) {
@@ -125,7 +127,7 @@ export class ApiService {
         return data.task
     }
 
-    static async startTask(userId: string, taskData: {
+    static async startTask(taskData: {
         prompt: string
         repo_url: string
         branch?: string
@@ -137,7 +139,7 @@ export class ApiService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...getUserIdHeader(userId)
+                ...getAuthHeaders()
             },
             body: JSON.stringify(taskData)
         })
@@ -150,9 +152,9 @@ export class ApiService {
         return data
     }
 
-    static async getTaskStatus(userId: string, taskId: number): Promise<any> {
+    static async getTaskStatus(taskId: number): Promise<any> {
         const response = await fetch(`${API_BASE}/task-status/${taskId}`, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (!response.ok) {
@@ -163,7 +165,7 @@ export class ApiService {
         return data.task
     }
 
-    static async addChatMessage(userId: string, taskId: number, message: {
+    static async addChatMessage(taskId: number, message: {
         role: string
         content: string
     }): Promise<Task> {
@@ -171,7 +173,7 @@ export class ApiService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...getUserIdHeader(userId)
+                ...getAuthHeaders()
             },
             body: JSON.stringify(message)
         })
@@ -184,7 +186,7 @@ export class ApiService {
         return data.task
     }
 
-    static async createPullRequest(userId: string, taskId: number, prData: {
+    static async createPullRequest(taskId: number, prData: {
         title?: string
         body?: string
         github_token: string
@@ -193,7 +195,7 @@ export class ApiService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...getUserIdHeader(userId)
+                ...getAuthHeaders()
             },
             body: JSON.stringify(prData)
         })
@@ -229,9 +231,9 @@ export class ApiService {
         return data
     }
 
-    static async getGitDiff(userId: string, taskId: number): Promise<string> {
+    static async getGitDiff(taskId: number): Promise<string> {
         const response = await fetch(`${API_BASE}/git-diff/${taskId}`, {
-            headers: getUserIdHeader(userId)
+            headers: getAuthHeaders()
         })
         
         if (!response.ok) {
@@ -240,6 +242,54 @@ export class ApiService {
         
         const data = await response.json()
         return data.git_diff || ''
+    }
+
+    // Authentication methods
+    static async generateToken(userId: string): Promise<{
+        access_token: string
+        refresh_token: string
+        expires_in: number
+    }> {
+        const response = await fetch(`${API_BASE}/auth/token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ user_id: userId })
+        })
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate token')
+        }
+        
+        return response.json()
+    }
+    
+    static async refreshToken(refreshToken: string): Promise<{
+        access_token: string
+        expires_in: number
+    }> {
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        })
+        
+        if (!response.ok) {
+            throw new Error('Failed to refresh token')
+        }
+        
+        return response.json()
+    }
+    
+    static async verifyToken(): Promise<boolean> {
+        const response = await fetch(`${API_BASE}/auth/verify`, {
+            headers: getAuthHeaders()
+        })
+        
+        return response.ok
     }
 
     // Utility functions

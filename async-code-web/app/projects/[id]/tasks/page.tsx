@@ -36,7 +36,7 @@ export default function ProjectTasksPage() {
         if (!user?.id) return;
         
         try {
-            const projectData = await ApiService.getProject(user.id, projectId);
+            const projectData = await ApiService.getProject(projectId);
             setProject(projectData);
         } catch (error) {
             console.error('Error loading project:', error);
@@ -48,7 +48,7 @@ export default function ProjectTasksPage() {
         
         try {
             setLoading(true);
-            const taskData = await ApiService.getTasks(user.id, projectId);
+            const taskData = await ApiService.getTasks(projectId);
             setTasks(taskData);
         } catch (error) {
             console.error('Error loading tasks:', error);

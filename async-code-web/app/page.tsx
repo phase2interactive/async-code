@@ -117,7 +117,7 @@ export default function Home() {
         if (!user?.id) return;
         
         try {
-            const projectData = await ApiService.getProjects(user.id);
+            const projectData = await ApiService.getProjects();
             setProjects(projectData);
         } catch (error) {
             console.error('Error loading projects:', error);
@@ -163,7 +163,7 @@ export default function Home() {
 
         setIsLoading(true);
         try {
-            const response = await ApiService.startTask(user.id, {
+            const response = await ApiService.startTask({
                 prompt: prompt.trim(),
                 repo_url: repoUrl,
                 branch: branch,

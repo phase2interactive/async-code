@@ -1,6 +1,6 @@
 # Task ID: 1
 # Title: Implement JWT-based Authentication System
-# Status: pending
+# Status: done
 # Dependencies: None
 # Priority: high
 # Description: Replace the vulnerable X-User-ID header authentication with secure JWT-based authentication

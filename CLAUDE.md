@@ -36,6 +36,25 @@ docker-compose down          # Stop all services
 ./test-model-selection.sh    # Test model selection functionality
 ```
 
+### Testing the Application
+**IMPORTANT: Always use Docker Compose for testing to ensure proper environment setup**
+```bash
+# Start all services for testing
+docker-compose up            # Run in foreground to see logs
+docker-compose up -d         # Run in background
+
+# Stop all services after testing
+docker-compose down
+
+# View logs if running in background
+docker-compose logs -f
+
+# DO NOT manually start services with `python main.py` or `npm run dev` for testing
+# This can cause port conflicts and permission issues
+```
+
+For test user implementation details, see: `docs/TEST_USER_RECOMMENDATIONS.md`
+
 ## Architecture Overview
 
 This is a multi-agent code task management system with three main components:
@@ -83,10 +102,13 @@ This is a multi-agent code task management system with three main components:
 - `users` - User authentication and preferences
 - Row-level security (RLS) ensures users only see their own data
 
-### API Authentication
-- Frontend sends `X-User-ID` header with Supabase user ID
+### API Authentication (JWT-based)
+- Frontend sends JWT tokens in `Authorization: Bearer <token>` header
+- Backend validates JWT tokens and verifies user existence
+- Tokens expire after 1 hour, refresh tokens valid for 7 days
+- Automatic token refresh handled by frontend auth context
 - CORS configured for localhost:3000 and Vercel deployments
-- Supabase handles user authentication via Auth UI
+- Supabase handles initial user authentication via Auth UI
 
 ### Git Integration
 - Automatic repository cloning with provided GitHub token
@@ -107,6 +129,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_service_key
+JWT_SECRET=your-very-secure-secret-key-minimum-32-chars
 ```
 
 ## Code Style

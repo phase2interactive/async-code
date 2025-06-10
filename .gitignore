@@ -9,6 +9,7 @@ __pycache__/
 .windsurfrules
 # C extensions
 *.so
+tasks/
 
 # Distribution / packaging
 .Python
@@ -182,3 +183,21 @@ coverage/
 .DS_Store
 *.pem
 tasks_backup.json
+
+# Added by Task Master AI
+# Logs
+logs
+dev-debug.log
+# Dependency directories
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+# Task files
+tasks.json
