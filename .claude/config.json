@@ -1,0 +1,81 @@
+{
+  "name": "claude-code",
+  "version": "1.0.0",
+  "description": "Claude Code configuration for async-code project",
+  "settings": {
+    "autoLoadRules": true,
+    "taskTracking": {
+      "enabled": true,
+      "provider": "taskmaster",
+      "autoInit": true
+    },
+    "contextFiles": [
+      "CLAUDE.md",
+      "WORKFLOW.md",
+      "PLANNING.md",
+      "TASK.md"
+    ],
+    "codeStyle": {
+      "typescript": {
+        "quotes": "single",
+        "semi": true,
+        "tabWidth": 2,
+        "printWidth": 160
+      },
+      "python": {
+        "formatter": "black",
+        "linter": "ruff",
+        "typeChecker": "mypy"
+      }
+    },
+    "tools": {
+      "preferredSearch": "Task",
+      "parallelExecution": true,
+      "batchOperations": true
+    }    
+  },
+  "rules": {
+    "directory": ".claude/rules",
+    "format": "markdown",
+    "autoApply": [
+      "claude_code_rules.md",
+      "dev_workflow.md",
+      "taskmaster.md",
+      "task_master_integration.md",
+      "async_code_patterns.md"
+    ]
+  },
+  "integrations": {    
+    "docker": {
+      "compose": true,
+      "buildScript": "./build.sh"
+    },
+    "testing": {
+      "frontend": {
+        "runner": "npm test",
+        "lint": "npm run lint",
+        "typecheck": "npm run typecheck"
+      },
+      "backend": {
+        "runner": "pytest",
+        "lint": "ruff check",
+        "typecheck": "mypy"
+      }
+    }
+  },
+  "project": {
+    "type": "fullstack",
+    "frontend": {
+      "framework": "nextjs",
+      "path": "async-code-web"
+    },
+    "backend": {
+      "framework": "flask",
+      "path": "server"
+    },
+    "database": {
+      "provider": "supabase",
+      "features": ["auth", "rls", "realtime"]
+    }
+  }
+}
