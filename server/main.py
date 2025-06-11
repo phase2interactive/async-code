@@ -68,13 +68,6 @@ app.register_blueprint(projects_bp)
 # Register test user endpoints (only in non-production)
 if os.environ.get("ENVIRONMENT") != "production":
     app.register_blueprint(test_users_bp, url_prefix='/api')
-    
-    # Apply rate limiting to test endpoints
-    limiter.limit("10 per hour")(test_users_bp.route('/test-users', methods=['POST']))
-    limiter.limit("20 per hour")(test_users_bp.route('/test-users/<user_id>', methods=['DELETE']))
-    limiter.limit("60 per hour")(test_users_bp.route('/test-users', methods=['GET']))
-    limiter.limit("5 per hour")(test_users_bp.route('/test-users/cleanup', methods=['POST']))
-    limiter.limit("30 per hour")(test_users_bp.route('/test-users/<user_id>/token', methods=['POST']))
 
 # Authentication endpoints
 @app.route('/api/auth/token', methods=['POST'])
