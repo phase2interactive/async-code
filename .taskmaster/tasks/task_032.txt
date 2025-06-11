@@ -1,0 +1,43 @@
+# Task ID: 32
+# Title: Create Test User Management Service
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Implement a service for automated test user creation and management using Supabase service role. This is essential for preventing production data contamination and enabling reliable automated testing.
+# Details:
+Create a TestUserService class that uses Supabase service role key to create test users. Implement methods: createTestUser(email='test@asynccode.test'), generateJWTToken(userId), and deleteTestUser(userId). Use environment variables for service role key. Ensure fixed user IDs for predictable testing. Include user validation and error handling. This service is critical for maintaining test isolation and preventing production issues.
+
+# Test Strategy:
+Unit tests for user creation, JWT generation, and deletion. Mock Supabase client. Verify user data structure and token validity. Test error scenarios like duplicate users and invalid credentials.
+
+# Subtasks:
+## 1. Service Class Structure and Initialization [done]
+### Dependencies: None
+### Description: Create the TestUserService class with proper constructor, dependency injection setup, and initialization of Supabase client and configuration parameters
+### Details:
+Implement class structure with constructor accepting Supabase client, JWT secret, and other configuration. Set up proper TypeScript interfaces and initialize all required dependencies for the service.
+
+## 2. User Creation with Supabase Integration [done]
+### Dependencies: 32.1
+### Description: Implement user creation functionality that integrates with Supabase authentication and database operations
+### Details:
+Create methods to register new test users in Supabase, handle user profile creation, manage user metadata, and ensure proper database transactions for user setup.
+
+## 3. JWT Token Generation Methods [done]
+### Dependencies: 32.1
+### Description: Develop JWT token generation and management functionality for test user authentication
+### Details:
+Implement token generation with proper payload structure, expiration handling, token refresh mechanisms, and integration with Supabase session management.
+
+## 4. User Deletion and Cleanup Functionality [done]
+### Dependencies: 32.2
+### Description: Create comprehensive user deletion methods with proper cleanup of all associated data and resources
+### Details:
+Implement user deletion from Supabase auth, cleanup of user data from database tables, handle cascading deletions, and ensure complete removal of test user artifacts.
+
+## 5. Error Handling with Validation Logic [done]
+### Dependencies: 32.2, 32.3, 32.4
+### Description: Implement robust error handling, input validation, and system stability measures across all service methods
+### Details:
+Add comprehensive error handling for Supabase operations, input validation for user data, proper exception handling, logging mechanisms, and fallback strategies for critical failures.
+

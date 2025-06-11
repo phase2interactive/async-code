@@ -1,0 +1,11 @@
+# Task ID: 37
+# Title: Setup Docker Compose Test Profile
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Create docker-compose.test.yml with isolated test database and environment configuration. This ensures complete isolation from production systems.
+# Details:
+Create docker-compose.test.yml with services: test-db (PostgreSQL), test-supabase, and app-test. Use separate database volumes and networks. Configure test-specific environment variables in .env.test. Include health checks and dependency management. Set up quick startup and teardown scripts. Ensure complete isolation from production. This is critical for preventing test interference with production systems.
+
+# Test Strategy:
+Test container startup and connectivity. Verify environment isolation. Test database migrations and seeding. Validate service dependencies and health checks. Test teardown and cleanup procedures.

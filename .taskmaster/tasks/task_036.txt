@@ -1,0 +1,11 @@
+# Task ID: 36
+# Title: Implement JWT Authentication for Tests
+# Status: pending
+# Dependencies: 32
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Create JWT token generation and validation system specifically for test users. This enables proper authentication in tests without compromising production security.
+# Details:
+Extend TestUserService with JWT methods: generateTestToken(userId, expiresIn), validateTestToken(token), and refreshTestToken(token). Use same JWT secret as production but with test-specific claims. Include token expiration handling. Support long-running tests with refresh capability. Store tokens securely in test context. This is essential for maintaining authentication security in test environments.
+
+# Test Strategy:
+Test token generation, validation, and refresh. Verify token claims and expiration. Test invalid token scenarios. Mock JWT library functions. Validate token format and security.

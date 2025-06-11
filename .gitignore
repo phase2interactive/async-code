@@ -9,7 +9,6 @@ __pycache__/
 .windsurfrules
 # C extensions
 *.so
-tasks/
 
 # Distribution / packaging
 .Python

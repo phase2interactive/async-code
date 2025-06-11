@@ -1,0 +1,190 @@
+# Task ID: 31
+# Title: Implement Test User System for Playwright E2E Testing
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Create a comprehensive test user management system for Playwright end-to-end tests that handles authentication, database seeding, and Git operations in an isolated test environment. This is essential for preventing production issues and enabling reliable automated testing.
+# Details:
+## Overview
+**CRITICAL PRIORITY**: Implement a robust test user system that allows Playwright tests to run with proper authentication, database access, and Git operations without affecting production data or requiring real GitHub credentials. This system is fundamental to maintaining system stability and preventing production incidents.
+
+## Current Challenges
+1. **Authentication**: Tests need Supabase auth sessions to generate JWT tokens
+2. **External Dependencies**: GitHub API requires real tokens and has rate limits
+3. **Data Isolation**: Test data must not interfere with production
+4. **Cleanup**: Test artifacts need automatic cleanup
+5. **Reproducibility**: Tests must be deterministic and repeatable
+
+## Proposed Solution
+
+### 1. Test User Service (server/test_utils/test_user_service.py)
+```python
+class TestUserService:
+    def create_test_user(email: str) -> dict:
+        # Use Supabase service role to create user
+        # Bypass email verification
+        # Return user object with ID
+    
+    def generate_jwt_tokens(user_id: str) -> dict:
+        # Generate JWT tokens for test user
+        # Use same logic as production auth.py
+        
+    def cleanup_test_user(user_id: str):
+        # Delete user and all associated data
+        # Clean up projects, tasks, etc.
+```
+
+### 2. Git Mock Service (server/test_utils/git_mock_service.py)
+```python
+class GitMockService:
+    def create_test_repo(repo_name: str) -> str:
+        # Create local Git repo in /tmp/test-repos/
+        # Initialize with sample files
+        # Return repo path (file:// URL)
+        
+    def cleanup_test_repos():
+        # Remove all test repositories
+```
+
+### 3. Seed Script (scripts/seed_test_data.py)
+```python
+# Creates consistent test environment:
+# - Test user with known credentials
+# - Sample projects and tasks
+# - Local Git repositories
+# - Test-specific Docker containers
+```
+
+### 4. Docker Compose Test Profile (docker-compose.test.yml)
+```yaml
+services:
+  backend:
+    environment:
+      - TESTING_MODE=true
+      - TEST_USER_EMAIL=test@asynccode.test
+      - BYPASS_GITHUB=true
+    volumes:
+      - ./test-repos:/tmp/test-repos
+```
+
+### 5. Playwright Configuration
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  globalSetup: './tests/global-setup.ts',
+  globalTeardown: './tests/global-teardown.ts',
+  use: {
+    baseURL: 'http://localhost:3000',
+    storageState: 'tests/.auth/user.json', // Persist auth
+  }
+});
+```
+
+### 6. Test Authentication Flow
+```typescript
+// tests/global-setup.ts
+async function globalSetup() {
+  // 1. Start docker-compose with test profile
+  // 2. Run seed script to create test user
+  // 3. Get JWT tokens via API
+  // 4. Save auth state for reuse
+}
+```
+
+## Implementation Steps
+
+### Phase 1: Test User Infrastructure
+1. Create TestUserService with Supabase user creation
+2. Implement JWT token generation for test users
+3. Add cleanup methods for test data
+4. Create test-specific database schema/tables
+
+### Phase 2: Git Mocking
+1. Implement GitMockService for local repo management
+2. Create sample repositories with test data
+3. Update backend to support file:// Git URLs in test mode
+4. Add cleanup for temporary repositories
+
+### Phase 3: Seed Scripts
+1. Create comprehensive seed_test_data.py script
+2. Generate consistent test projects and tasks
+3. Initialize test Git repositories
+4. Configure test environment variables
+
+### Phase 4: Playwright Integration
+1. Set up global setup/teardown scripts
+2. Implement auth state persistence
+3. Create test helpers for common operations
+4. Add cleanup verification
+
+### Phase 5: CI/CD Integration
+1. Update GitHub Actions to run seed script
+2. Configure test-specific Docker images
+3. Add test result reporting
+4. Implement test parallelization
+
+## Security Considerations
+1. **Never use production credentials in tests**
+2. **Test user emails should use .test TLD (e.g., user@asynccode.test)**
+3. **Store test secrets in separate .env.test file**
+4. **Implement automatic cleanup even if tests fail**
+5. **Use time-based expiration for test data**
+
+## Best Practices
+1. **Idempotent Setup**: Seed script should be re-runnable
+2. **Fast Teardown**: Cleanup should be quick and thorough
+3. **Isolation**: Each test run should be independent
+4. **Deterministic**: Same seed = same test data
+5. **Documentation**: Clear setup instructions for developers
+
+## Environment Variables
+```bash
+# .env.test
+TESTING_MODE=true
+TEST_USER_EMAIL=test@asynccode.test
+TEST_USER_PASSWORD=test-password-123
+TEST_SUPABASE_URL=http://localhost:54321
+TEST_SUPABASE_ANON_KEY=test-anon-key
+TEST_SUPABASE_SERVICE_KEY=test-service-key
+TEST_JWT_SECRET=test-jwt-secret-minimum-32-characters
+BYPASS_GITHUB=true
+TEST_REPOS_PATH=/tmp/test-repos
+```
+
+## Cleanup Strategy
+1. **Immediate**: Clean up after each test suite
+2. **Scheduled**: Cron job to clean orphaned test data
+3. **Time-based**: Auto-expire test data after 1 hour
+4. **Manual**: Provide cleanup command for developers
+
+## Example Test
+```typescript
+test('create and execute AI task', async ({ page }) => {
+  // Auth state loaded automatically from global setup
+  await page.goto('/');
+  
+  // Create task with local test repo
+  await page.fill('[name="repo_url"]', 'file:///tmp/test-repos/sample-app');
+  await page.fill('[name="prompt"]', 'Add error handling to main function');
+  await page.click('button:has-text("Start Task")');
+  
+  // Verify task execution
+  await expect(page.locator('.task-status')).toHaveText('completed');
+});
+```
+
+## Success Criteria
+1. ✅ Playwright tests run without manual setup
+2. ✅ No production data affected
+3. ✅ No GitHub API calls in test mode
+4. ✅ Tests are fast and reliable
+5. ✅ Easy for new developers to run tests
+6. ✅ Automatic cleanup of all test artifacts
+
+# Test Strategy:
+1. Unit tests for TestUserService and GitMockService
+2. Integration tests for seed script execution
+3. E2E tests to verify full test flow works
+4. Cleanup verification tests
+5. Performance tests for test setup/teardown time
+6. Security tests to ensure no credential leakage

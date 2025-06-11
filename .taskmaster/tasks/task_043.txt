@@ -1,0 +1,11 @@
+# Task ID: 43
+# Title: Implement Pre-commit Hooks and Validation
+# Status: pending
+# Dependencies: 41
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Set up pre-commit hooks for test validation and automated quality checks. This prevents broken code from entering the repository and maintains system stability.
+# Details:
+Create .pre-commit-config.yaml with hooks: test-validation, lint-check, type-check, and security-scan. Implement test-validation script that runs quick smoke tests. Include code formatting and import sorting. Add commit message validation. Configure hook bypass for emergency commits. This is essential for maintaining code quality and preventing issues from reaching production.
+
+# Test Strategy:
+Test pre-commit hook execution and validation. Verify hook bypass functionality. Test with different commit scenarios. Validate performance impact. Test hook installation and updates.

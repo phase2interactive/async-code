@@ -1,0 +1,11 @@
+# Task ID: 34
+# Title: Build Test Data Cleanup Scheduler
+# Status: pending
+# Dependencies: 32, 33
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Implement automated cleanup service for test users and repositories with 1-hour TTL. This prevents test data accumulation and ensures system stability.
+# Details:
+Create CleanupScheduler service using cron jobs or background tasks. Track creation timestamps for test users and repositories. Implement cleanup methods: cleanupExpiredUsers(), cleanupExpiredRepos(), and scheduleCleanup(). Set TTL to 1 hour. Include logging and error recovery. Use database triggers or scheduled functions. This is essential for preventing test data from accumulating and affecting system performance.
+
+# Test Strategy:
+Test TTL functionality with mock timestamps. Verify cleanup execution and logging. Test failure recovery scenarios. Mock time progression for faster testing. Validate complete cleanup of users and repositories.
