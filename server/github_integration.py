@@ -4,6 +4,7 @@ import logging
 from github import Github
 from models import TaskStatus
 from utils import tasks
+from utils.validators import GitHubIntegrationValidator
 
 logger = logging.getLogger(__name__)
 
@@ -199,8 +200,8 @@ def create_pull_request(task_id):
         
         # Create pull request
         pr = repo.create_pull(
-            title=pr_title,
-            body=pr_body,
+            title=validated_inputs.pr_title,
+            body=validated_inputs.pr_body,
             head=pr_branch,
             base=base_branch
         )
@@ -270,7 +271,9 @@ def apply_patch_to_github_repo(repo, branch, patch_content, task):
         
         # Now update all the files via GitHub API
         updated_files = []
-        commit_message = f"Claude Code: {task['prompt'][:100]}"
+        # Sanitize commit message to prevent injection
+        safe_prompt = task['prompt'][:100].replace('\n', ' ').replace('\r', '')
+        commit_message = f"Claude Code: {safe_prompt}"
         
         for file_path, new_content in files_to_update.items():
             try:
