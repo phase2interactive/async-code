@@ -5,7 +5,6 @@
 # Priority: high
 # Description: Remove hardcoded secrets and implement encrypted storage for sensitive configuration
 # Details:
-Use environment variables for all secrets. Implement encryption for GitHub tokens using cryptography library. Create secrets rotation mechanism. Use AWS Secrets Manager or similar for production. Remove all hardcoded API keys from codebase.
+Use environment variables for all secrets. 
+Remove all hardcoded API keys from codebase.
 
-# Test Strategy:
-Code scanning for hardcoded secrets, functional tests for encrypted storage/retrieval, rotation testing
