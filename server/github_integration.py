@@ -35,6 +35,25 @@ def validate_github_token():
         # If repo URL provided, test repo access
         repo_info = {}
         if repo_url:
+            # Validate repo URL format for security
+            try:
+                # Create a temporary validator just to validate the URL
+                from utils.validators import TaskInputValidator
+                temp_validator = TaskInputValidator(
+                    task_id="550e8400-e29b-41d4-a716-446655440000",  # Dummy UUID
+                    repo_url=repo_url,
+                    target_branch="main",  # Dummy branch
+                    prompt="test",  # Dummy prompt
+                    model="claude"  # Dummy model
+                )
+                # If we get here, URL is valid
+            except ValueError as e:
+                logger.warning(f"Invalid repo URL provided: {repo_url}")
+                return jsonify({
+                    'valid': False,
+                    'error': 'Invalid repository URL format'
+                }), 400
+            
             try:
                 repo_parts = repo_url.replace('https://github.com/', '').replace('.git', '')
                 repo = g.get_repo(repo_parts)
@@ -105,7 +124,7 @@ def validate_github_token():
         
     except Exception as e:
         logger.error(f"Token validation error: {str(e)}")
-        return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
+        return jsonify({'error': 'Token validation failed'}), 401
 
 @github_bp.route('/create-pr/<task_id>', methods=['POST'])
 def create_pull_request(task_id):
@@ -187,14 +206,13 @@ def create_pull_request(task_id):
             error_msg = str(branch_error).lower()
             if "resource not accessible" in error_msg:
                 detailed_error = (
-                    f"GitHub token lacks permission to create branches. "
-                    f"Please ensure your token has 'repo' scope (not just 'public_repo'). "
-                    f"Error: {branch_error}"
+                    "GitHub token lacks permission to create branches. "
+                    "Please ensure your token has 'repo' scope (not just 'public_repo')."
                 )
             elif "already exists" in error_msg:
                 detailed_error = f"Branch '{pr_branch}' already exists. Please try again or use a different task."
             else:
-                detailed_error = f"Failed to create branch '{pr_branch}': {branch_error}"
+                detailed_error = "Failed to create branch. Please check your permissions and try again."
                 
             return jsonify({'error': detailed_error}), 403
         
@@ -254,6 +272,19 @@ def apply_patch_to_github_repo(repo, branch, patch_content, task):
                 # Next line should be +++ b/filename
                 if i + 1 < len(lines) and lines[i + 1].startswith('+++ b/'):
                     current_file = lines[i + 1][6:]  # Remove '+++ b/'
+                    
+                    # Validate file path for security
+                    if '..' in current_file or current_file.startswith('/'):
+                        logger.warning(f"🚫 Skipping potentially unsafe file path: {current_file}")
+                        i += 1
+                        continue
+                    
+                    # Additional path validation
+                    if any(dangerous in current_file for dangerous in ['../', '..\\', '~/', '\\..', '/etc/', '/usr/', '/bin/', '/sys/', '/proc/']):
+                        logger.warning(f"🚫 Skipping file with dangerous path pattern: {current_file}")
+                        i += 1
+                        continue
+                    
                     logger.info(f"📄 Found file change: {current_file}")
                     
                     # Get the original file content if it exists
@@ -288,6 +319,11 @@ def apply_patch_to_github_repo(repo, branch, patch_content, task):
         commit_message = f"Claude Code: {safe_prompt}"
         
         for file_path, new_content in files_to_update.items():
+            # Double-check path safety before GitHub API calls
+            if '..' in file_path or file_path.startswith('/') or any(d in file_path for d in ['~/', '../', '..\\']):
+                logger.error(f"🚫 Refusing to update unsafe path: {file_path}")
+                continue
+                
             try:
                 # Check if file exists
                 try:
