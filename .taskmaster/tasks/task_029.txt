@@ -5,7 +5,71 @@
 # Priority: low
 # Description: Create end-to-end integration tests for critical user workflows
 # Details:
-Use Playwright or Cypress for E2E testing. Create test scenarios for complete task workflows. Add database seeding for test data. Implement test environment setup/teardown. Add visual regression testing.
+Use Playwright for E2E testing. Use test user account. 
+Create test scenarios for complete task workflows. 
+Add database seeding for test data. 
+Implement test environment setup/teardown. 
+Add visual regression testing.
+
+
+
+Minimum Test Scenarios for Critical User Workflows
+
+  Based on the async-code application, here are the critical path test scenarios we need to cover:
+
+  1. Authentication Flow (Critical)
+
+  - Sign In: User can sign in with valid credentials
+  - Sign Out: User can sign out successfully
+  - Protected Routes: Unauthenticated users are redirected to sign-in
+
+  2. Task Creation and Execution (Critical)
+
+  - Create Task: User can create a new AI coding task
+  - View Task Progress: User can see real-time task execution status
+  - View Task Results: User can see completed task results and diffs
+
+  3. Project Management (Important)
+
+  - Create Project: User can create a new project with GitHub repository
+  - View Projects: User can see their list of projects
+
+  4. GitHub Integration (Critical for Task Execution)
+
+  - Set GitHub Token: User can set their GitHub token in settings
+  - Clone Repository: System can clone repository for task execution
+
+  5. Basic Navigation (Smoke Tests)
+
+  - Navigate Between Pages: User can navigate between main pages
+  - Responsive UI: Key workflows work on mobile viewport
+
+  Test Implementation Strategy
+
+  Phase 1: Core Infrastructure
+
+  1. Set up Playwright with TypeScript
+  2. Create test database seeding utilities
+  3. Set up test environment configuration
+
+  Phase 2: Critical Path Tests
+
+  1. Authentication flow (sign in/out, protected routes)
+  2. Task creation and viewing results
+  3. GitHub token configuration
+
+  Phase 3: Extended Tests (if time permits)
+
+  1. Project management
+  2. Multiple concurrent tasks
+  3. Error scenarios
+
+  Key Test Principles
+
+  - Fast: Tests should run quickly (< 5 minutes total)
+  - Reliable: No flaky tests - use proper waits and assertions
+  - Independent: Each test should be self-contained
+  - Maintainable: Use Page Object Model pattern
 
 # Test Strategy:
 E2E test coverage for critical paths, test reliability and flakiness monitoring, cross-browser testing
