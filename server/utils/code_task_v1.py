@@ -8,6 +8,9 @@ import time
 from models import TaskStatus
 
 from .container import cleanup_orphaned_containers
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import get_container_user_mapping, get_workspace_path, get_security_options, CONTAINER_UID, CONTAINER_GID
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -116,6 +119,16 @@ def _run_ai_code_task_internal(task_id):
             container_image = 'codex-automation:latest'
         else:
             container_image = 'claude-code-automation:latest'
+        
+        # Ensure workspace permissions for non-root container execution
+        workspace_path = get_workspace_path(task_id)
+        try:
+            os.makedirs(workspace_path, exist_ok=True)
+            # Set ownership to configured UID/GID for container user
+            os.chown(workspace_path, CONTAINER_UID, CONTAINER_GID)
+            logger.info(f"🔧 Created workspace with proper permissions: {workspace_path} (UID:{CONTAINER_UID}, GID:{CONTAINER_GID})")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not set workspace permissions: {e}")
         
         # Create the command to run in container
         container_command = f'''
@@ -374,18 +387,19 @@ exit 0
             'name': f'ai-code-task-{task_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}',  # Highly unique container name with UUID
             'mem_limit': '2g',  # Limit memory usage to prevent resource conflicts
             'cpu_shares': 1024,  # Standard CPU allocation
-            'ulimits': [docker.types.Ulimit(name='nofile', soft=1024, hard=2048)]  # File descriptor limits
+            'ulimits': [docker.types.Ulimit(name='nofile', soft=1024, hard=2048)],  # File descriptor limits
+            'volumes': {
+                workspace_path: {'bind': '/workspace/tmp', 'mode': 'rw'}  # Mount workspace with proper permissions
+            }
         }
         
         # Add security configurations for better isolation
         logger.info(f"🔒 Running {model_name} with secure container configuration")
         container_kwargs.update({
             # Security options for better isolation
-            'security_opt': [
-                'no-new-privileges=true'   # Prevent privilege escalation
-            ],
+            'security_opt': get_security_options(),
             'read_only': False,            # Allow writes to workspace only
-            'user': '1000:1000'           # Run as non-root user
+            'user': get_container_user_mapping()  # Run as configured non-root user
         })
         
         # Retry container creation with enhanced conflict handling
