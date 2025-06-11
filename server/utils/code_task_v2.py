@@ -151,10 +151,7 @@ def _run_ai_code_task_v2_internal(task_id: int, user_id: str, github_token: str)
             env_vars.update({
                 'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
                 'OPENAI_NONINTERACTIVE': '1',  # Custom flag for OpenAI tools
-                'CODEX_QUIET_MODE': '1',  # Official Codex non-interactive flag
-                'CODEX_UNSAFE_ALLOW_NO_SANDBOX': '1',  # Disable Codex internal sandboxing to prevent Docker conflicts
-                'CODEX_DISABLE_SANDBOX': '1',  # Alternative sandbox disable flag
-                'CODEX_NO_SANDBOX': '1'  # Another potential sandbox disable flag
+                'CODEX_QUIET_MODE': '1'  # Official Codex non-interactive flag
             })
         
         # Use specialized container images based on model
@@ -212,14 +209,10 @@ if [ "{model_cli}" = "codex" ]; then
     
     # Set environment variables for non-interactive mode
     export CODEX_QUIET_MODE=1
-    export CODEX_UNSAFE_ALLOW_NO_SANDBOX=1
-    export CODEX_DISABLE_SANDBOX=1
-    export CODEX_NO_SANDBOX=1
     
     # Debug: Verify environment variables are set
     echo "=== CODEX DEBUG INFO ==="
     echo "CODEX_QUIET_MODE: $CODEX_QUIET_MODE"
-    echo "CODEX_UNSAFE_ALLOW_NO_SANDBOX: $CODEX_UNSAFE_ALLOW_NO_SANDBOX"
     echo "OPENAI_API_KEY: $(echo $OPENAI_API_KEY | head -c 8)..."
     echo "USING OFFICIAL CODEX FLAGS: --approval-mode full-auto --quiet for non-interactive operation"
     echo "======================="
@@ -234,7 +227,6 @@ if [ "{model_cli}" = "codex" ]; then
         
         # Use official non-interactive flags for Docker environment
         # Using --approval-mode full-auto as per official Codex documentation
-        # Also disable Codex's internal sandboxing to prevent conflicts with Docker
         /usr/local/bin/codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
         CODEX_EXIT_CODE=$?
         echo "Codex finished with exit code: $CODEX_EXIT_CODE"
@@ -251,7 +243,6 @@ if [ "{model_cli}" = "codex" ]; then
         
         # Use official non-interactive flags for Docker environment
         # Using --approval-mode full-auto as per official Codex documentation
-        # Also disable Codex's internal sandboxing to prevent conflicts with Docker
         codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
         CODEX_EXIT_CODE=$?
         echo "Codex finished with exit code: $CODEX_EXIT_CODE"
@@ -469,20 +460,16 @@ exit 0
             'ulimits': [docker.types.Ulimit(name='nofile', soft=1024, hard=2048)]  # File descriptor limits
         }
         
-        # Add essential Docker configuration for Codex compatibility
-        if model_cli == 'codex':
-            logger.warning(f"⚠️  Running Codex with enhanced Docker privileges to bypass seccomp/landlock restrictions")
-            container_kwargs.update({
-                # Essential security options for Codex compatibility
-                'security_opt': [
-                    'seccomp=unconfined',      # Disable seccomp to prevent syscall filtering conflicts
-                    'apparmor=unconfined',     # Disable AppArmor MAC controls
-                    'no-new-privileges=false'  # Allow privilege escalation needed by Codex
-                ],
-                'cap_add': ['ALL'],            # Grant all Linux capabilities
-                'privileged': True,            # Run in fully privileged mode
-                'pid_mode': 'host'            # Share host PID namespace
-            })
+        # Add security configurations for better isolation
+        logger.info(f"🔒 Running {model_name} with secure container configuration")
+        container_kwargs.update({
+            # Security options for better isolation
+            'security_opt': [
+                'no-new-privileges=true'   # Prevent privilege escalation
+            ],
+            'read_only': False,            # Allow writes to workspace only
+            'user': '1000:1000'           # Run as non-root user
+        })
         
         # Retry container creation with enhanced conflict handling
         container = None

@@ -9,12 +9,19 @@ RUN apk add --no-cache \
     python3 \
     py3-pip
 
+# Create non-root user with UID 1000 (or use existing node user)
+RUN (addgroup -g 1000 -S appuser 2>/dev/null || true) && \
+    (adduser -u 1000 -S appuser -G appuser 2>/dev/null || true) && \
+    mkdir -p /home/appuser && \
+    chown -R 1000:1000 /home/appuser
+
 # Install Codex CLI globally
 # Requires Node.js 22+ according to their documentation
 RUN npm install -g @openai/codex
 
-# Create workspace directory
+# Create workspace directory and set ownership
 WORKDIR /workspace
+RUN chown -R 1000:1000 /workspace
 
 # Configure git (default values, will be overridden)
 RUN git config --global user.email "codex-automation@automation.com" && \
@@ -23,6 +30,9 @@ RUN git config --global user.email "codex-automation@automation.com" && \
 
 # Set up environment
 ENV NODE_ENV=production
+
+# Switch to non-root user (UID 1000)
+USER 1000
 
 # Default command
 CMD ["bash"] 
