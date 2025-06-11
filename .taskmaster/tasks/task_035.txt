@@ -1,0 +1,11 @@
+# Task ID: 35
+# Title: Create Seed Scripts Framework
+# Status: pending
+# Dependencies: 32, 33
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Develop idempotent Python seed scripts for generating test data, projects, and tasks. This ensures consistent test environments and prevents test flakiness.
+# Details:
+Build SeedDataManager class with methods: seedProjects(), seedTasks(), seedRepositories(), and resetTestData(). Create JSON fixtures for sample data. Implement idempotent operations using upsert patterns. Include versioning for seed data. Support different test scenarios (empty, basic, complex). Store fixtures in tests/fixtures/ directory. This is critical for maintaining test consistency and reliability.
+
+# Test Strategy:
+Test idempotent behavior by running seeds multiple times. Verify data consistency and completeness. Test different fixture scenarios. Validate foreign key relationships. Mock database operations for unit tests.

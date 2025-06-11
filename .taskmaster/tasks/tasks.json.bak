@@ -409,63 +409,12 @@
       "id": 32,
       "title": "Create Test User Management Service",
       "description": "**CRITICAL FOR SYSTEM STABILITY** - Implement a service for automated test user creation and management using Supabase service role. This is essential for preventing production data contamination and enabling reliable automated testing.",
-      "status": "done",
+      "status": "pending",
       "dependencies": [],
       "priority": "high",
       "details": "Create a TestUserService class that uses Supabase service role key to create test users. Implement methods: createTestUser(email='test@asynccode.test'), generateJWTToken(userId), and deleteTestUser(userId). Use environment variables for service role key. Ensure fixed user IDs for predictable testing. Include user validation and error handling. This service is critical for maintaining test isolation and preventing production issues.",
       "testStrategy": "Unit tests for user creation, JWT generation, and deletion. Mock Supabase client. Verify user data structure and token validity. Test error scenarios like duplicate users and invalid credentials.",
-      "subtasks": [
-        {
-          "id": 1,
-          "title": "Service Class Structure and Initialization",
-          "description": "Create the TestUserService class with proper constructor, dependency injection setup, and initialization of Supabase client and configuration parameters",
-          "dependencies": [],
-          "details": "Implement class structure with constructor accepting Supabase client, JWT secret, and other configuration. Set up proper TypeScript interfaces and initialize all required dependencies for the service.",
-          "status": "done"
-        },
-        {
-          "id": 2,
-          "title": "User Creation with Supabase Integration",
-          "description": "Implement user creation functionality that integrates with Supabase authentication and database operations",
-          "dependencies": [
-            1
-          ],
-          "details": "Create methods to register new test users in Supabase, handle user profile creation, manage user metadata, and ensure proper database transactions for user setup.",
-          "status": "done"
-        },
-        {
-          "id": 3,
-          "title": "JWT Token Generation Methods",
-          "description": "Develop JWT token generation and management functionality for test user authentication",
-          "dependencies": [
-            1
-          ],
-          "details": "Implement token generation with proper payload structure, expiration handling, token refresh mechanisms, and integration with Supabase session management.",
-          "status": "done"
-        },
-        {
-          "id": 4,
-          "title": "User Deletion and Cleanup Functionality",
-          "description": "Create comprehensive user deletion methods with proper cleanup of all associated data and resources",
-          "dependencies": [
-            2
-          ],
-          "details": "Implement user deletion from Supabase auth, cleanup of user data from database tables, handle cascading deletions, and ensure complete removal of test user artifacts.",
-          "status": "done"
-        },
-        {
-          "id": 5,
-          "title": "Error Handling with Validation Logic",
-          "description": "Implement robust error handling, input validation, and system stability measures across all service methods",
-          "dependencies": [
-            2,
-            3,
-            4
-          ],
-          "details": "Add comprehensive error handling for Supabase operations, input validation for user data, proper exception handling, logging mechanisms, and fallback strategies for critical failures.",
-          "status": "done"
-        }
-      ]
+      "subtasks": []
     },
     {
       "id": 33,
@@ -525,7 +474,7 @@
       "id": 37,
       "title": "Setup Docker Compose Test Profile",
       "description": "**CRITICAL FOR SYSTEM STABILITY** - Create docker-compose.test.yml with isolated test database and environment configuration. This ensures complete isolation from production systems.",
-      "status": "done",
+      "status": "pending",
       "dependencies": [],
       "priority": "high",
       "details": "Create docker-compose.test.yml with services: test-db (PostgreSQL), test-supabase, and app-test. Use separate database volumes and networks. Configure test-specific environment variables in .env.test. Include health checks and dependency management. Set up quick startup and teardown scripts. Ensure complete isolation from production. This is critical for preventing test interference with production systems.",

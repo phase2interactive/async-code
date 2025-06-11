@@ -1,0 +1,11 @@
+# Task ID: 38
+# Title: Update Playwright Test Configuration
+# Status: pending
+# Dependencies: 32, 33, 36
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Modify Playwright tests to use local repositories and test user authentication. This enables reliable end-to-end testing without external dependencies.
+# Details:
+Update playwright.config.js to use test environment. Create TestAuthHelper class for login automation. Update page objects to use file:// URLs. Implement test data factories for consistent test setup. Add beforeEach hooks for user authentication. Configure parallel execution with isolated test data. This is essential for maintaining test reliability and preventing production interference.
+
+# Test Strategy:
+Test authentication flow in Playwright. Verify local repository access. Test parallel execution isolation. Validate page object updates. Test data factory consistency across test runs.

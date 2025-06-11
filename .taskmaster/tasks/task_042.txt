@@ -1,0 +1,11 @@
+# Task ID: 42
+# Title: Create Test Helper Utilities and Factories
+# Status: pending
+# Dependencies: 35, 36, 38
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Develop utility functions and data factories for consistent test setup across all test types. This ensures test reliability and reduces maintenance overhead.
+# Details:
+Create TestHelpers module with functions: createTestProject(), createTestTask(), setupTestRepo(), loginTestUser(), and cleanupTestData(). Implement data factories for generating consistent test objects. Include assertion helpers and custom matchers. Support test data relationships and dependencies. This is critical for maintaining test consistency and reducing test maintenance burden.
+
+# Test Strategy:
+Test helper function reliability and consistency. Verify data factory outputs. Test cleanup effectiveness. Validate assertion helpers. Test cross-test data consistency.

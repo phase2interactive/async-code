@@ -1,0 +1,11 @@
+# Task ID: 33
+# Title: Implement Local Git Repository Factory
+# Status: pending
+# Dependencies: 32
+# Priority: high
+# Description: **CRITICAL FOR SYSTEM STABILITY** - Create a system to generate and manage local Git repositories in /tmp/test-repos/ for testing. This prevents external API dependencies and ensures test reliability.
+# Details:
+Build GitRepositoryFactory class with methods: createRepository(name, template), initializeRepo(path), seedWithContent(path, files), and generateFileUrl(repoName). Store repos in /tmp/test-repos/{repo-name}/. Support file:// URLs instead of https://github.com/. Include git init, add, commit operations. Implement cleanup for old repositories. This is critical for eliminating GitHub API dependencies in tests.
+
+# Test Strategy:
+Test repository creation, file operations, and URL generation. Verify git operations work correctly. Test cleanup functionality. Mock file system operations where needed. Validate file:// URL format.
