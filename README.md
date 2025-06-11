@@ -27,6 +27,28 @@ A code agent task management system that provides parallel execution of AI-power
 - **Agents**: Claude Code (Anthropic) with extensible support for other models
 - **Task Management**: Parallel execution system based on container
 
+## Security
+
+The system implements comprehensive security measures to ensure safe execution of AI agents:
+
+### Container Security
+- **Non-root Execution**: All containers run as UID 1000 (non-root user)
+- **No Privileged Access**: Containers run without `--privileged` flag or host PID namespace
+- **Capability Restrictions**: No dangerous Linux capabilities granted (no `CAP_SYS_ADMIN`, etc.)
+- **Privilege Escalation Prevention**: `no-new-privileges=true` security option enforced
+- **Sandboxed Environment**: Proper namespace isolation between container and host
+
+### File System Security
+- **Volume Permissions**: Workspace volumes mounted with proper ownership (1000:1000)
+- **Read-only System Paths**: Containers cannot modify `/etc`, `/usr`, or other system directories
+- **Isolated Workspaces**: Each task gets its own temporary workspace with restricted permissions
+
+### Security Testing
+The project includes security test scripts:
+- `test-container-security.sh`: Verifies container isolation and restrictions
+- `test-ai-functionality.sh`: Ensures agents work correctly with security measures
+- Unit tests in `server/tests/test_container_security.py`
+
 ## Quick Start
 
 1. **Setup**
