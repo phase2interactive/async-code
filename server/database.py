@@ -1,21 +1,14 @@
-import os
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from supabase import create_client, Client
 import json
+from env_config import Config
 
 logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')  # Use service role key for server operations
-
-if not supabase_url or not supabase_key:
-    logger.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables")
-    raise ValueError("Supabase configuration is missing")
-
-supabase: Client = create_client(supabase_url, supabase_key)
+supabase: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_SERVICE_ROLE_KEY)
 
 class DatabaseOperations:
     

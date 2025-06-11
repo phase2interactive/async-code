@@ -77,10 +77,18 @@ The project includes security test scripts:
 
 ## Environment Variables
 
+See [Environment Variables Documentation](docs/ENVIRONMENT_VARIABLES.md) for complete configuration details.
+
+### Quick Setup
+
 ```bash
-# server/.env
+# server/.env (Required)
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+JWT_SECRET=your-very-secure-secret-key-minimum-32-chars
+
+# API Keys (Optional)
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-FLASK_ENV=production
 ```
 
 
