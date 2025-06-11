@@ -1,0 +1,89 @@
+Core Task Management Logic
+Task Master is an AI-powered task management system designed for software development workflows. Here are the key components and requirements:
+1. Core Task Structure
+Tasks follow a specific JSON format with these key fields:
+
+id: Unique identifier for the task
+title: Brief title of the task
+description: Concise description of what the task involves
+status: Current state ("pending", "done", "deferred")
+dependencies: Array of task IDs that must be completed before this task
+priority: Task priority level
+subtasks: List of smaller tasks that make up the main task
+
+2. File Structure & Organization
+The system uses a consolidated .taskmaster/ directory structure:
+
+.taskmaster/config.json - Configuration settings
+.taskmaster/tasks/tasks.json - Main task database
+.taskmaster/tasks/task-*.txt - Individual task files
+.taskmaster/docs/prd.txt - Product Requirements Document
+.taskmaster/reports/ - Generated analysis reports
+.taskmaster/templates/ - Example templates
+
+3. Core Commands & Operations
+The system provides these key task management operations:
+Task Creation & Parsing:
+
+parse-prd - Generate tasks from Product Requirements Document
+add-task - Add individual tasks using AI
+
+Task Querying & Navigation:
+
+list - List all tasks with status filtering
+next - Show next task based on dependencies and priority
+show <id> - Display detailed task information
+
+Task Modification:
+
+update - Update multiple tasks from a specific ID
+update-task - Update a single task
+set-status - Change task status
+expand - Break down complex tasks into subtasks
+move - Move tasks and reorganize hierarchy
+
+Task Analysis:
+
+analyze-complexity - Analyze task complexity
+complexity-report - Generate readable complexity reports
+validate-dependencies - Check for circular dependencies
+
+4. Dependency Management
+The system handles task dependencies with:
+
+Dependency arrays linking tasks by ID
+Status indicators (✅ for completed, ⏱️ for pending)
+Automatic validation of circular dependencies
+Dependency-aware task ordering for the "next" command
+
+5. AI Integration
+Multiple AI model support with configurable roles:
+
+Main model - Primary task generation and updates
+Research model - Research-backed task expansion
+Fallback model - Backup when main/research models fail
+Support for multiple providers (Anthropic, OpenAI, Perplexity, etc.)
+
+6. Status Management
+Flexible task status workflow supporting:
+
+"pending" - Ready to work on
+"done" - Completed tasks
+"deferred" - Postponed tasks
+Custom status transitions with validation
+
+7. Subtask Hierarchy
+Hierarchical task management with:
+
+Parent-child task relationships
+Subtask expansion using AI
+Subtask clearing and regeneration
+Moving subtasks between parent tasks
+
+8. Integration Features
+Designed for AI-driven development with:
+
+Cursor AI IDE integration via MCP (Model Control Protocol)
+Natural language commands through AI assistants
+Automatic task file generation for easy reference
+PRD parsing for project initialization
