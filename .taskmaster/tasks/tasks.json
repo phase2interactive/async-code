@@ -15,13 +15,13 @@
       "id": 2,
       "title": "Remove Container Privileged Access",
       "description": "Eliminate privileged Docker container execution to prevent container escape vulnerabilities",
-      "details": "Update Docker container configurations to run as non-root user. Remove --privileged flag from docker run commands. Implement proper user mapping with --user flag. Create dedicated non-root user in container images. Remove host PID namespace access.",
-      "testStrategy": "Security tests to verify containers cannot access host resources, functional tests to ensure AI agents still work properly",
-      "priority": "high",
+      "status": "done",
       "dependencies": [
         1
       ],
-      "status": "pending",
+      "priority": "high",
+      "details": "Successfully removed all privileged Docker container execution. Updated Docker container configurations to run as non-root user with --user 1000:1000. Removed --privileged flag from docker run commands in both code_task_v1.py and code_task_v2.py. Eliminated host PID namespace access (pid_mode: 'host'). Removed all Linux capabilities (cap_add: ['ALL']). Removed permissive security options (seccomp=unconfined, apparmor=unconfined). Created dedicated non-root user in both Dockerfile.claude-automation and Dockerfile.codex-automation. Added security option no-new-privileges=true to prevent privilege escalation. Removed environment variables related to sandbox bypass (CODEX_UNSAFE_ALLOW_NO_SANDBOX, etc.). Created comprehensive test scripts to verify security restrictions and AI functionality.",
+      "testStrategy": "Security tests verify containers cannot access host resources and run as non-root user. Functional tests confirm AI agents still work properly. All tests pass successfully.",
       "subtasks": []
     },
     {
