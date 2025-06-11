@@ -11,6 +11,8 @@ from .container import cleanup_orphaned_containers
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import get_container_user_mapping, get_workspace_path, get_security_options, CONTAINER_UID, CONTAINER_GID
+from utils.validators import TaskInputValidator
+from utils.secure_exec import create_safe_docker_script
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -84,11 +86,27 @@ def _run_ai_code_task_internal(task_id):
         
         model_name = task.get('model', 'claude').upper()
         logger.info(f"🚀 Starting {model_name} Code task {task_id}")
-        logger.info(f"📋 Task details: prompt='{task['prompt'][:50]}...', repo={task['repo_url']}, branch={task['branch']}, model={model_name}")
-        logger.info(f"Starting {model_name} task {task_id}")
         
-        # Escape special characters in prompt for shell safety
-        escaped_prompt = task['prompt'].replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
+        # Validate inputs using Pydantic model
+        try:
+            validated_inputs = TaskInputValidator(
+                task_id=str(task_id),
+                repo_url=task['repo_url'],
+                target_branch=task['branch'],
+                prompt=task['prompt'],
+                model=task.get('model', 'claude'),
+                github_username=task.get('github_username')
+            )
+        except Exception as validation_error:
+            error_msg = f"Input validation failed: {str(validation_error)}"
+            logger.error(error_msg)
+            task['status'] = TaskStatus.FAILED
+            task['error'] = error_msg
+            save_tasks()
+            return
+        
+        logger.info(f"📋 Task details: prompt='{validated_inputs.prompt[:50]}...', repo={validated_inputs.repo_url}, branch={validated_inputs.target_branch}, model={model_name}")
+        logger.info(f"Starting {model_name} task {task_id}")
         
         # Create container environment variables
         env_vars = {
@@ -101,7 +119,7 @@ def _run_ai_code_task_internal(task_id):
         }
         
         # Add model-specific API keys and environment variables
-        model_cli = task.get('model', 'claude')
+        model_cli = validated_inputs.model
         if model_cli == 'claude':
             env_vars.update({
                 'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
@@ -130,245 +148,14 @@ def _run_ai_code_task_internal(task_id):
         except Exception as e:
             logger.warning(f"⚠️  Could not set workspace permissions: {e}")
         
-        # Create the command to run in container
-        container_command = f'''
-set -e
-echo "Setting up repository..."
-
-# Clone repository
-git clone -b {task['branch']} {task['repo_url']} /workspace/repo
-cd /workspace/repo
-
-# Configure git
-git config user.email "claude-code@automation.com"
-git config user.name "Claude Code Automation"
-
-# We'll extract the patch instead of pushing directly
-echo "📋 Will extract changes as patch for later PR creation..."
-
-echo "Starting {model_cli.upper()} Code with prompt..."
-
-# Create a temporary file with the prompt
-echo "{escaped_prompt}" > /tmp/prompt.txt
-
-# Check which CLI tool to use based on model selection
-if [ "{model_cli}" = "codex" ]; then
-    echo "Using Codex (OpenAI Codex) CLI..."
-    
-    # Set environment variables for non-interactive mode
-    export CODEX_QUIET_MODE=1
-    
-    # Debug: Verify environment variables are set
-    echo "=== CODEX DEBUG INFO ==="
-    echo "CODEX_QUIET_MODE: $CODEX_QUIET_MODE"
-    echo "OPENAI_API_KEY: $(echo $OPENAI_API_KEY | head -c 8)..."
-    echo "USING OFFICIAL CODEX FLAGS: --approval-mode full-auto --quiet for non-interactive operation"
-    echo "======================="
-    
-    # Read the prompt from file
-    PROMPT_TEXT=$(cat /tmp/prompt.txt)
-    
-    # Check for codex installation
-    if [ -f /usr/local/bin/codex ]; then
-        echo "Found codex at /usr/local/bin/codex"
-        echo "Running Codex in non-interactive mode..."
-        
-        # Use official non-interactive flags for Docker environment
-        # Using --approval-mode full-auto as per official Codex documentation
-        /usr/local/bin/codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
-        CODEX_EXIT_CODE=$?
-        echo "Codex finished with exit code: $CODEX_EXIT_CODE"
-        
-        if [ $CODEX_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Codex failed with exit code $CODEX_EXIT_CODE"
-            exit $CODEX_EXIT_CODE
-        fi
-        
-        echo "✅ Codex completed successfully"
-    elif command -v codex >/dev/null 2>&1; then
-        echo "Using codex from PATH..."
-        echo "Running Codex in non-interactive mode..."
-        
-        # Use official non-interactive flags for Docker environment
-        # Using --approval-mode full-auto as per official Codex documentation
-        codex --approval-mode full-auto --quiet "$PROMPT_TEXT"
-        CODEX_EXIT_CODE=$?
-        echo "Codex finished with exit code: $CODEX_EXIT_CODE"
-        
-        if [ $CODEX_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Codex failed with exit code $CODEX_EXIT_CODE"
-            exit $CODEX_EXIT_CODE
-        fi
-        
-        echo "✅ Codex completed successfully"
-    else
-        echo "ERROR: codex command not found anywhere"
-        echo "Please ensure Codex CLI is installed in the container"
-        exit 1
-    fi
-    
-else
-    echo "Using Claude CLI..."
-    
-    # Try different ways to invoke claude
-    echo "Checking claude installation..."
-
-if [ -f /usr/local/bin/claude ]; then
-    echo "Found claude at /usr/local/bin/claude"
-    echo "File type:"
-    file /usr/local/bin/claude || echo "file command not available"
-    echo "First few lines:"
-    head -5 /usr/local/bin/claude || echo "head command failed"
-    
-    # Check if it's a shell script
-    if head -1 /usr/local/bin/claude | grep -q "#!/bin/sh\|#!/bin/bash\|#!/usr/bin/env bash"; then
-        echo "Detected shell script, running with sh..."
-        sh /usr/local/bin/claude < /tmp/prompt.txt
-    # Check if it's a Node.js script (including env -S node pattern)
-    elif head -1 /usr/local/bin/claude | grep -q "#!/usr/bin/env.*node\|#!/usr/bin/node"; then
-        echo "Detected Node.js script..."
-        if command -v node >/dev/null 2>&1; then
-            echo "Running with node..."
-            # Try different approaches for Claude CLI
-            
-            # First try with --help to see available options
-            echo "Checking claude options..."
-            node /usr/local/bin/claude --help 2>/dev/null || echo "Help not available"
-            
-            # Try non-interactive approaches
-            echo "Attempting non-interactive execution..."
-            
-            # Method 1: Use the official --print flag for non-interactive mode
-            echo "Using --print flag for non-interactive mode..."
-            cat /tmp/prompt.txt | node /usr/local/bin/claude --print --allowedTools "Edit,Bash"
-            CLAUDE_EXIT_CODE=$?
-            echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-            
-            if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-                echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-                exit $CLAUDE_EXIT_CODE
-            fi
-            
-            echo "✅ Claude Code completed successfully"
-        else
-            echo "Node.js not found, trying direct execution..."
-            /usr/local/bin/claude < /tmp/prompt.txt
-            CLAUDE_EXIT_CODE=$?
-            echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-            if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-                echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-                exit $CLAUDE_EXIT_CODE
-            fi
-            echo "✅ Claude Code completed successfully"
-        fi
-    # Check if it's a Python script
-    elif head -1 /usr/local/bin/claude | grep -q "#!/usr/bin/env python\|#!/usr/bin/python"; then
-        echo "Detected Python script..."
-        if command -v python3 >/dev/null 2>&1; then
-            echo "Running with python3..."
-            python3 /usr/local/bin/claude < /tmp/prompt.txt
-            CLAUDE_EXIT_CODE=$?
-        elif command -v python >/dev/null 2>&1; then
-            echo "Running with python..."
-            python /usr/local/bin/claude < /tmp/prompt.txt
-            CLAUDE_EXIT_CODE=$?
-        else
-            echo "Python not found, trying direct execution..."
-            /usr/local/bin/claude < /tmp/prompt.txt
-            CLAUDE_EXIT_CODE=$?
-        fi
-        echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-        if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-            exit $CLAUDE_EXIT_CODE
-        fi
-        echo "✅ Claude Code completed successfully"
-    else
-        echo "Unknown script type, trying direct execution..."
-        /usr/local/bin/claude < /tmp/prompt.txt
-        CLAUDE_EXIT_CODE=$?
-        echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-        if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-            exit $CLAUDE_EXIT_CODE
-        fi
-        echo "✅ Claude Code completed successfully"
-    fi
-elif command -v claude >/dev/null 2>&1; then
-    echo "Using claude from PATH..."
-    CLAUDE_PATH=$(which claude)
-    echo "Claude found at: $CLAUDE_PATH"
-    claude < /tmp/prompt.txt
-    CLAUDE_EXIT_CODE=$?
-    echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-    if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-        echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-        exit $CLAUDE_EXIT_CODE
-    fi
-    echo "✅ Claude Code completed successfully"
-else
-    echo "ERROR: claude command not found anywhere"
-    echo "Checking available interpreters:"
-    which python3 2>/dev/null && echo "python3: available" || echo "python3: not found"
-    which python 2>/dev/null && echo "python: available" || echo "python: not found"
-    which node 2>/dev/null && echo "node: available" || echo "node: not found"
-    which sh 2>/dev/null && echo "sh: available" || echo "sh: not found"
-    exit 1
-fi
-
-fi  # End of model selection (claude vs codex)
-
-# Check if there are changes
-if git diff --quiet; then
-    echo "ℹ️  No changes made by {model_cli.upper()} - this is a valid outcome"
-    echo "The AI tool ran successfully but decided not to make changes"
-    
-    # Create empty patch and diff for consistency
-    echo "=== PATCH START ==="
-    echo "No changes were made"
-    echo "=== PATCH END ==="
-    
-    echo "=== GIT DIFF START ==="
-    echo "No changes were made"
-    echo "=== GIT DIFF END ==="
-    
-    echo "=== CHANGED FILES START ==="
-    echo "No files were changed"
-    echo "=== CHANGED FILES END ==="
-    
-    # Set empty commit hash
-    echo "COMMIT_HASH="
-else
-    # Commit changes locally
-    git add .
-    git commit -m "{model_cli.capitalize()}: {escaped_prompt[:100]}"
-
-    # Get commit info
-    COMMIT_HASH=$(git rev-parse HEAD)
-    echo "COMMIT_HASH=$COMMIT_HASH"
-
-    # Generate patch file for later application
-    echo "📦 Generating patch file..."
-    git format-patch HEAD~1 --stdout > /tmp/changes.patch
-    echo "=== PATCH START ==="
-    cat /tmp/changes.patch
-    echo "=== PATCH END ==="
-
-    # Also get the diff for display
-    echo "=== GIT DIFF START ==="
-    git diff HEAD~1 HEAD
-    echo "=== GIT DIFF END ==="
-
-    # List changed files for reference
-    echo "=== CHANGED FILES START ==="
-    git diff --name-only HEAD~1 HEAD
-    echo "=== CHANGED FILES END ==="
-fi
-
-# Explicitly exit with success code
-echo "Container work completed successfully"
-exit 0
-'''
+        # Create the command to run in container using secure method
+        container_command = create_safe_docker_script(
+            repo_url=validated_inputs.repo_url,
+            branch=validated_inputs.target_branch,
+            prompt=validated_inputs.prompt,
+            model_cli=validated_inputs.model,
+            github_username=validated_inputs.github_username
+        )
         
         # Run container with unified AI Code tools (supports both Claude and Codex)
         logger.info(f"🐳 Creating Docker container for task {task_id} using {container_image} (model: {model_name})")
