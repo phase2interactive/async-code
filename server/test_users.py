@@ -27,15 +27,6 @@ from test_user_models import (
 # Create blueprint
 test_users_bp = Blueprint('test_users', __name__)
 
-# Rate limiting configuration
-RATE_LIMITS = {
-    'create': '10 per hour',      # Max 10 test users per hour
-    'delete': '20 per hour',      # Max 20 deletions per hour  
-    'list': '60 per hour',        # Max 60 list requests per hour
-    'cleanup': '5 per hour',      # Max 5 cleanup operations per hour
-    'refresh': '30 per hour'      # Max 30 token refreshes per hour
-}
-
 # Initialize service (lazy loading)
 _test_user_service = None
 
