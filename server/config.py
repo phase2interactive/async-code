@@ -1,29 +1,19 @@
 """Configuration module for container security settings."""
-import os
+# Import from centralized configuration
+from env_config import Config
 
-# Container user configuration
-CONTAINER_UID = int(os.getenv('CONTAINER_UID', '1000'))
-CONTAINER_GID = int(os.getenv('CONTAINER_GID', '1000'))
-CONTAINER_USER = f"{CONTAINER_UID}:{CONTAINER_GID}"
+# Re-export container configuration for backward compatibility
+CONTAINER_UID = Config.CONTAINER_UID
+CONTAINER_GID = Config.CONTAINER_GID
+CONTAINER_USER = Config.CONTAINER_USER
+CONTAINER_SECURITY_OPTS = Config.CONTAINER_SECURITY_OPTS
+CONTAINER_READ_ONLY = Config.CONTAINER_READ_ONLY
+CONTAINER_MEM_LIMIT = Config.CONTAINER_MEM_LIMIT
+CONTAINER_CPU_SHARES = Config.CONTAINER_CPU_SHARES
+WORKSPACE_BASE_PATH = Config.WORKSPACE_BASE_PATH
+WORKSPACE_PREFIX = Config.WORKSPACE_PREFIX
 
-# Security configuration
-CONTAINER_SECURITY_OPTS = ['no-new-privileges=true']
-CONTAINER_READ_ONLY = False  # Set to True for read-only root filesystem
-CONTAINER_MEM_LIMIT = os.getenv('CONTAINER_MEM_LIMIT', '2g')
-CONTAINER_CPU_SHARES = int(os.getenv('CONTAINER_CPU_SHARES', '1024'))
-
-# Workspace configuration
-WORKSPACE_BASE_PATH = os.getenv('WORKSPACE_BASE_PATH', '/tmp')
-WORKSPACE_PREFIX = 'ai-workspace-'
-
-def get_container_user_mapping():
-    """Get the user mapping for containers."""
-    return CONTAINER_USER
-
-def get_workspace_path(task_id):
-    """Get the workspace path for a specific task."""
-    return os.path.join(WORKSPACE_BASE_PATH, f"{WORKSPACE_PREFIX}{task_id}")
-
-def get_security_options():
-    """Get the security options for containers."""
-    return CONTAINER_SECURITY_OPTS.copy()
+# Re-export functions for backward compatibility
+get_container_user_mapping = Config.get_container_user_mapping
+get_workspace_path = Config.get_workspace_path
+get_security_options = Config.get_security_options

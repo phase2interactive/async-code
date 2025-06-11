@@ -3,15 +3,9 @@
 Simple demonstration of JWT authentication functionality
 """
 
-import os
 import jwt
 from datetime import datetime, timedelta, timezone
-
-# JWT configuration
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-very-secure-secret-key-change-this-in-production-minimum-32-chars')
-JWT_ALGORITHM = 'HS256'
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
-JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
+from env_config import Config
 
 
 def generate_tokens(user_id: str) -> dict:
@@ -22,7 +16,7 @@ def generate_tokens(user_id: str) -> dict:
     access_payload = {
         'user_id': user_id,
         'type': 'access',
-        'exp': now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES),
+        'exp': now + timedelta(minutes=Config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES),
         'iat': now
     }
     
@@ -30,24 +24,24 @@ def generate_tokens(user_id: str) -> dict:
     refresh_payload = {
         'user_id': user_id,
         'type': 'refresh',
-        'exp': now + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+        'exp': now + timedelta(days=Config.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
         'iat': now
     }
     
-    access_token = jwt.encode(access_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    refresh_token = jwt.encode(refresh_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    access_token = jwt.encode(access_payload, Config.JWT_SECRET, algorithm=Config.JWT_ALGORITHM)
+    refresh_token = jwt.encode(refresh_payload, Config.JWT_SECRET, algorithm=Config.JWT_ALGORITHM)
     
     return {
         'access_token': access_token,
         'refresh_token': refresh_token,
-        'expires_in': JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60  # in seconds
+        'expires_in': Config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60  # in seconds
     }
 
 
 def verify_token(token: str, token_type: str = 'access') -> dict:
     """Verify and decode a JWT token."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, Config.JWT_SECRET, algorithms=[Config.JWT_ALGORITHM])
         
         # Verify token type
         if payload.get('type') != token_type:
@@ -124,7 +118,7 @@ def main():
         'exp': datetime.now(timezone.utc) - timedelta(hours=1),
         'iat': datetime.now(timezone.utc) - timedelta(hours=2)
     }
-    expired_token = jwt.encode(expired_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    expired_token = jwt.encode(expired_payload, Config.JWT_SECRET, algorithm=Config.JWT_ALGORITHM)
     try:
         verify_token(expired_token, 'access')
         print("      ✗ Should have failed!")
