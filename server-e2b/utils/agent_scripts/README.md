@@ -1,72 +1,83 @@
-# Agent Scripts
+# Agent Scripts for E2B Sandbox Execution
 
-This directory contains sophisticated agent scripts that are uploaded to E2B sandboxes for execution.
+This directory contains the agent scripts that are uploaded to E2B sandboxes for AI-powered code generation tasks.
 
 ## Overview
 
-Instead of generating agent code inline, we maintain reusable scripts here that can:
-- Be tested independently
-- Handle complex scenarios
-- Provide better error handling
-- Be versioned and improved over time
+The agent scripts provide a standardized interface for different AI models (Claude, GPT/Codex) to execute code generation tasks within isolated E2B sandbox environments.
 
-## Scripts
+## Key Features
 
-### codex_agent.py
+### 1. Structured JSON Output (Required)
+Both agents require structured JSON output for all responses:
 
-A sophisticated GPT/Codex agent that:
-- Analyzes repository structure for context
-- Generates appropriate system prompts
-- Handles API errors gracefully
-- Supports configuration via environment variables
-- Reads prompts from files (avoiding injection issues)
-- Parses and applies file changes from GPT responses
+```json
+{
+  "summary": "Brief description of changes",
+  "file_operations": [
+    {
+      "action": "create|update|delete",
+      "path": "file/path",
+      "content": "file content"
+    }
+  ]
+}
+```
+
+### 2. Repository Analysis
+Agents analyze the repository structure to provide better context:
+- File and directory listing
+- Language detection
+- Key file identification (README, package.json, etc.)
+
+### 3. Error Handling
+- Proper exit codes (sys.exit(1) on failure)
+- Detailed logging for debugging
+- JSON validation with clear error messages
+
+## Agent Scripts
 
 ### claude_agent.py
+- Uses Anthropic Python SDK (no more CLI security issues)
+- Supports environment variables for configuration
+- Returns structured JSON output
 
-A sophisticated Claude agent that:
-- Uses Anthropic Python SDK for better control
-- Analyzes repository and reads key files for context
-- Handles API errors and rate limits
-- Supports configuration via environment variables
-- Reads prompts from files (avoiding injection issues)
-- Parses and applies file changes from Claude responses
+### codex_agent.py
+- Uses OpenAI function calling for enforced structured output
+- Sophisticated repository analysis
+- Support for create, update, and delete operations
 
-## Usage
+### parser_utils.py
+- Shared parsing utilities
+- JSON parsing with regex fallback
+- Path normalization
+- Operation validation
 
-The scripts are automatically uploaded to E2B sandboxes when needed. The main code in `code_task_e2b_real.py` reads these scripts and uploads them to the sandbox filesystem before execution.
+## Testing
 
-## Adding New Agents
-
-To add a new agent:
-
-1. Create a new Python script in this directory
-2. Follow the pattern of reading configuration from environment variables
-3. Read the task prompt from `/tmp/agent_prompt.txt`
-4. Output results to stdout
-5. Update the corresponding method in `code_task_e2b_real.py`
+Run the test suite:
+```bash
+cd /workspaces/async-code-worktrees/e2b-migration/server-e2b/utils/agent_scripts
+python -m pytest tests/ -v
+```
 
 ## Environment Variables
 
-Agents should read configuration from environment variables:
+### Claude Agent
+- `ANTHROPIC_API_KEY` (required)
+- `CLAUDE_MODEL` (default: claude-3-sonnet-20240229)
+- `CLAUDE_MAX_TOKENS` or `MAX_TOKENS` (default: 4000)
+- `CLAUDE_TEMPERATURE` or `TEMPERATURE` (default: 0.7)
 
-### API Keys
-- `OPENAI_API_KEY` - OpenAI API key (required for Codex agent)
-- `ANTHROPIC_API_KEY` - Anthropic API key (required for Claude agent)
+### Codex Agent
+- `OPENAI_API_KEY` (required)
+- `GPT_MODEL` (default: gpt-4)
+- `MAX_TOKENS` (default: 2000)
+- `TEMPERATURE` (default: 0.7)
 
-### Codex Agent Configuration
-- `GPT_MODEL` - Model to use (default: gpt-4)
-- `MAX_TOKENS` - Maximum tokens for response (default: 2000)
-- `TEMPERATURE` - Temperature for generation (default: 0.7)
+## JSON Output Requirements
 
-### Claude Agent Configuration
-- `CLAUDE_MODEL` - Model to use (default: claude-3-sonnet-20240229)
-- `CLAUDE_MAX_TOKENS` - Maximum tokens (default: 4000, falls back to `MAX_TOKENS`)
-- `CLAUDE_TEMPERATURE` - Temperature (default: 0.7, falls back to `TEMPERATURE`)
+**Important**: All AI responses must be valid JSON with the required format.
+Regex-based parsing has been removed to ensure consistency.
 
-## Security
-
-- Always read prompts from files, never from command line arguments
-- Validate all inputs
-- Handle errors gracefully
-- Don't expose sensitive information in error messages
+See `STRUCTURED_OUTPUT_GUIDE.md` for detailed information.
