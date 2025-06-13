@@ -1,0 +1,10 @@
+# E2B sandbox template configuration
+# This template is used for AI agent execution environments
+
+# Template configuration
+template_id = "async-code-agents"
+dockerfile = "./Dockerfile"
+
+# Runtime settings
+python_version = "3.11"
+node_version = "18"
