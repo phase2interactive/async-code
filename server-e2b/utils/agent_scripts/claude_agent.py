@@ -140,14 +140,7 @@ Your task is to implement the requested changes following these guidelines:
 3. Include necessary imports and dependencies
 4. Ensure backward compatibility unless breaking changes are explicitly requested
 5. Add comments for complex logic
-6. Follow the project's existing patterns and conventions
-
-When making changes, clearly indicate:
-- Which files to modify
-- What changes to make
-- Any new files to create
-
-Format your response to make it easy to parse programmatically. Use markdown code blocks with file paths."""
+6. Follow the project's existing patterns and conventions"""
         
         # Add key file contents for context
         if file_contents:
@@ -171,6 +164,35 @@ Format your response to make it easy to parse programmatically. Use markdown cod
             enhanced_prompt += f"Total files: {len(repo_info['files'])}\n"
             enhanced_prompt += f"Key directories: {', '.join(repo_info['directories'][:10])}\n"
             
+            # Add instructions for structured output
+            enhanced_prompt += """\n\nIMPORTANT: You must respond with a JSON object containing:
+- "summary": A brief description of changes made
+- "file_operations": An array of file operations to perform
+
+Each file operation must have:
+- "action": One of "create", "update", or "delete"
+- "path": The file path relative to repository root
+- "content": The complete file content (for create/update actions)
+
+Example response:
+{
+  "summary": "Added new feature X and updated tests",
+  "file_operations": [
+    {
+      "action": "create",
+      "path": "src/feature.py",
+      "content": "import os\n\ndef new_feature():\n    pass"
+    },
+    {
+      "action": "update",
+      "path": "tests/test_feature.py",
+      "content": "import pytest\n..."
+    }
+  ]
+}
+
+Respond ONLY with the JSON object, no additional text or markdown formatting."""
+            
             logger.info(f"Executing task with model: {self.model}")
             
             # Make API call
@@ -188,64 +210,113 @@ Format your response to make it easy to parse programmatically. Use markdown cod
             
         except anthropic.RateLimitError:
             logger.error("Anthropic API rate limit exceeded")
-            return "Error: API rate limit exceeded. Please try again later."
+            return json.dumps({
+                "summary": "Error: API rate limit exceeded",
+                "file_operations": []
+            })
         except anthropic.AuthenticationError:
             logger.error("Anthropic API authentication failed")
-            return "Error: Invalid API key"
+            return json.dumps({
+                "summary": "Error: Invalid API key",
+                "file_operations": []
+            })
         except Exception as e:
             logger.error(f"Error executing task: {e}")
-            return f"Error: {str(e)}"
+            return json.dumps({
+                "summary": f"Error: {str(e)}",
+                "file_operations": []
+            })
     
     def apply_changes(self, response: str) -> bool:
         """
         Apply the changes suggested by Claude.
         Returns True if all changes were applied successfully, False otherwise.
         """
-        logger.info("Parsing Claude's response for file changes...")
+        logger.info("Parsing Claude's response...")
         
-        changes = parse_file_changes(response)
+        try:
+            # Parse JSON response
+            data = json.loads(response)
+            
+            if "file_operations" not in data:
+                logger.error("Response missing 'file_operations' field")
+                return False
+            
+            logger.info(f"Found structured output with {len(data['file_operations'])} operations")
+            changes = data["file_operations"]
+            
+            # Print summary for orchestrator
+            if "summary" in data:
+                print(f"Summary: {data['summary']}")
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            print(f"Error: Invalid JSON response from Claude")
+            return False
         
         if not changes:
             logger.warning("No file changes detected in Claude's response")
-            logger.info("Claude's response:")
-            print(response)
             return True  # Not a failure - Claude might have provided instructions only
         
-        logger.info(f"Found {len(changes)} file changes to apply")
+        logger.info(f"Applying {len(changes)} file changes...")
         
         errors = 0
         for change in changes:
-            file_path = change['path']
-            content = change['content']
-            action = change['action']
+            # Handle both structured and regex-parsed formats
+            if isinstance(change, dict):
+                file_path = change.get('path', '')
+                content = change.get('content', '')
+                action = change.get('action', 'update')
+            else:
+                # Shouldn't happen, but be defensive
+                logger.error(f"Invalid change format: {change}")
+                errors += 1
+                continue
             
             # Normalize path
             file_path = normalize_file_path(file_path)
             
             try:
-                # Create directory if needed
-                dir_path = os.path.dirname(file_path)
-                if not os.path.exists(dir_path):
-                    os.makedirs(dir_path, exist_ok=True)
-                    logger.info(f"Created directory: {dir_path}")
-                
-                # Write the file
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                logger.info(f"✅ {action.capitalize()}d file: {file_path}")
+                if action == 'delete':
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        logger.info(f"✅ Deleted file: {file_path}")
+                    else:
+                        logger.warning(f"File to delete not found: {file_path}")
+                else:
+                    # Create or update
+                    if not content and action in ['create', 'update']:
+                        logger.error(f"No content provided for {action} operation on {file_path}")
+                        errors += 1
+                        continue
+                    
+                    # Create directory if needed
+                    dir_path = os.path.dirname(file_path)
+                    if not os.path.exists(dir_path):
+                        os.makedirs(dir_path, exist_ok=True)
+                        logger.info(f"Created directory: {dir_path}")
+                    
+                    # Check if file exists
+                    file_exists = os.path.exists(file_path)
+                    
+                    # Write the file
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    if action == 'create' or not file_exists:
+                        logger.info(f"✅ Created file: {file_path}")
+                    else:
+                        logger.info(f"✅ Updated file: {file_path}")
                 
             except Exception as e:
                 logger.error(f"❌ Failed to {action} {file_path}: {e}")
                 errors += 1
         
-        # Also print the full response for reference
-        logger.info("\nFull Claude response:")
-        print(response)
-        
         if errors > 0:
             logger.error(f"Failed to apply {errors} out of {len(changes)} changes")
             return False
         
+        logger.info("✅ All changes applied successfully")
         return True
 
 
