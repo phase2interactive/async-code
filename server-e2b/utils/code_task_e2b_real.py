@@ -331,8 +331,20 @@ class E2BCodeExecutor:
     
     async def _run_codex_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Codex/GPT agent in the sandbox"""
-        # Create a Python script to run OpenAI
-        script = f'''
+        # Read the sophisticated agent script
+        agent_script_path = os.path.join(
+            os.path.dirname(__file__), 
+            'agent_scripts', 
+            'codex_agent.py'
+        )
+        
+        # Use the sophisticated script if it exists, otherwise fall back to simple version
+        if os.path.exists(agent_script_path):
+            with open(agent_script_path, 'r') as f:
+                script = f.read()
+        else:
+            # Fallback simple script
+            script = f'''
 import openai
 import os
 import json
@@ -350,8 +362,9 @@ response = openai.ChatCompletion.create(
 print(response.choices[0].message.content)
 '''
         
-        # Write and execute the script
+        # Write the script and prompt to sandbox
         await sandbox.filesystem.write("/tmp/codex_agent.py", script)
+        await sandbox.filesystem.write("/tmp/agent_prompt.txt", prompt)
         
         try:
             # Check if OpenAI is already installed (in custom template)
