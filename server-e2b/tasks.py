@@ -58,10 +58,10 @@ def start_task():
         if not task:
             return jsonify({'error': 'Failed to create task'}), 500
         
-        # Start task in background thread with all required parameters
+        # Start task in background thread with minimal required parameters
         thread = threading.Thread(
             target=run_ai_code_task_e2b, 
-            args=(task['id'], user_id, github_token, repo_url, branch, prompt, model, project_id)
+            args=(task['id'], user_id, github_token)
         )
         thread.daemon = True
         thread.start()
