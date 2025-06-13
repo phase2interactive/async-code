@@ -10,7 +10,7 @@ import sys
 import json
 import logging
 from typing import Dict, List, Optional, Tuple
-import re
+from parser_utils import parse_file_changes, normalize_file_path
 
 # Configure logging
 logging.basicConfig(
@@ -196,54 +196,6 @@ Format your response to make it easy to parse programmatically. Use markdown cod
             logger.error(f"Error executing task: {e}")
             return f"Error: {str(e)}"
     
-    def parse_file_changes(self, response: str) -> List[Dict[str, str]]:
-        """Parse Claude's response to extract file changes."""
-        changes = []
-        
-        # Look for markdown code blocks with file paths
-        # Pattern: ```language:path/to/file or ```path/to/file
-        pattern = r'```(?:[\w]+:)?([\w/.-]+)\n(.*?)```'
-        matches = re.findall(pattern, response, re.DOTALL)
-        
-        for file_path, content in matches:
-            changes.append({
-                'path': file_path,
-                'content': content.strip(),
-                'action': 'create_or_update'
-            })
-        
-        # Also look for explicit file instructions
-        # Pattern: "Create file path/to/file:" or "Update file path/to/file:"
-        instruction_pattern = r'(Create|Update|Modify)\s+file\s+([\w/.-]+):'
-        instruction_matches = re.findall(instruction_pattern, response, re.IGNORECASE)
-        
-        for action, file_path in instruction_matches:
-            if not any(c['path'] == file_path for c in changes):
-                # Find the content after this instruction
-                start_idx = response.find(f"{action} file {file_path}:")
-                if start_idx != -1:
-                    # Look for the next file instruction or code block
-                    end_patterns = [
-                        r'\n(Create|Update|Modify)\s+file',
-                        r'\n```',
-                        r'\n\n\n'  # Triple newline as section separator
-                    ]
-                    
-                    end_idx = len(response)
-                    for pattern in end_patterns:
-                        match = re.search(pattern, response[start_idx:])
-                        if match:
-                            end_idx = min(end_idx, start_idx + match.start())
-                    
-                    content = response[start_idx:end_idx].split(':', 1)[1].strip()
-                    changes.append({
-                        'path': file_path,
-                        'content': content,
-                        'action': action.lower()
-                    })
-        
-        return changes
-    
     def apply_changes(self, response: str) -> bool:
         """
         Apply the changes suggested by Claude.
@@ -251,7 +203,7 @@ Format your response to make it easy to parse programmatically. Use markdown cod
         """
         logger.info("Parsing Claude's response for file changes...")
         
-        changes = self.parse_file_changes(response)
+        changes = parse_file_changes(response)
         
         if not changes:
             logger.warning("No file changes detected in Claude's response")
@@ -267,11 +219,8 @@ Format your response to make it easy to parse programmatically. Use markdown cod
             content = change['content']
             action = change['action']
             
-            # Ensure path is relative to repo root
-            if not file_path.startswith('/'):
-                file_path = f"/workspace/repo/{file_path}"
-            elif not file_path.startswith('/workspace/repo/'):
-                file_path = f"/workspace/repo{file_path}"
+            # Normalize path
+            file_path = normalize_file_path(file_path)
             
             try:
                 # Create directory if needed

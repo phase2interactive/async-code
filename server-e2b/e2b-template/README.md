@@ -20,6 +20,17 @@ The custom template includes:
 - OpenAI Python SDK
 - Anthropic Python SDK
 
+## Important: Template ID vs Template Name
+
+**Understanding the difference is crucial:**
+- **template_id** in `e2b.toml`: This is the template NAME you choose (e.g., "async-code-agents")
+- **E2B_TEMPLATE_ID** in `.env`: This is the UNIQUE ID assigned by E2B after building
+
+When you run `e2b template build`, E2B will:
+1. Use the `template_id` from `e2b.toml` as the base name
+2. Generate a unique ID like `async-code-agents-abc123`
+3. **This unique ID is what you must set as `E2B_TEMPLATE_ID` in your `.env`**
+
 ## Building the Template
 
 1. Ensure you have E2B CLI installed:
@@ -37,7 +48,8 @@ The custom template includes:
    ./build-template.sh
    ```
 
-4. The script will output a template ID like `async-code-agents-xxxxx`
+4. The script will output a unique template ID like `async-code-agents-abc123`
+5. **Copy this E2B-assigned ID (not the name from e2b.toml)**
 
 ## Using the Template
 
