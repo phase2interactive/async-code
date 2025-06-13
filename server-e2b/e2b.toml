@@ -1,0 +1,41 @@
+# E2B Configuration for AI Code Automation API
+
+# Basic runtime configuration
+runtime = "python3.12"
+memory_mb = 4096
+cpu_count = 2
+timeout = 1800  # 30 minutes
+
+# Start command
+start_cmd = "python main.py"
+
+# Environment variables (non-sensitive)
+[env_vars]
+FLASK_ENV = "production"
+DEBUG = "false"
+PORT = "8000"
+E2B_ENV = "true"
+ENABLE_TEST_USERS = "true"
+ENVIRONMENT = "development"
+CONTAINER_UID = "1000"
+CONTAINER_GID = "1000"
+CONTAINER_MEM_LIMIT = "2g"
+CONTAINER_CPU_SHARES = "1024"
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = "60"
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = "7"
+
+# System packages to install
+[packages]
+system = [
+    "git",
+    "curl",
+    "build-essential",
+    "nodejs",
+    "npm"
+]
+
+# Python packages are handled by requirements.txt
+
+# Port configuration
+[port]
+port = 8000
