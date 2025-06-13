@@ -225,9 +225,10 @@ After making changes, provide a clear summary of what was modified and why."""
         
         return changes
     
-    def apply_changes(self, instructions: str):
+    def apply_changes(self, instructions: str) -> bool:
         """
         Parse the GPT response and apply file changes.
+        Returns True if all changes were applied successfully, False otherwise.
         """
         logger.info("Parsing GPT response for file changes...")
         
@@ -237,10 +238,11 @@ After making changes, provide a clear summary of what was modified and why."""
             logger.warning("No file changes detected in GPT's response")
             logger.info("GPT Response:")
             print(instructions)
-            return
+            return True  # Not a failure - GPT might have provided instructions only
         
         logger.info(f"Found {len(changes)} file changes to apply")
         
+        errors = 0
         for change in changes:
             file_path = change['path']
             content = change['content']
@@ -273,10 +275,17 @@ After making changes, provide a clear summary of what was modified and why."""
                 
             except Exception as e:
                 logger.error(f"❌ Failed to {action} {file_path}: {e}")
+                errors += 1
         
         # Also print the full response for reference
         logger.info("\nFull GPT response:")
         print(instructions)
+        
+        if errors > 0:
+            logger.error(f"Failed to apply {errors} out of {len(changes)} changes")
+            return False
+        
+        return True
 
 
 def main():
@@ -291,8 +300,12 @@ def main():
         # Execute task
         result = agent.execute_task(prompt)
         
-        # Apply changes (currently just prints)
-        agent.apply_changes(result)
+        # Apply changes
+        success = agent.apply_changes(result)
+        
+        if not success:
+            logger.error("Failed to apply some changes")
+            sys.exit(1)
         
     except Exception as e:
         logger.error(f"Agent execution failed: {e}")

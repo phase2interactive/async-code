@@ -37,10 +37,10 @@ class ClaudeAgent:
         # Initialize Anthropic client
         self.client = anthropic.Anthropic(api_key=self.api_key)
         
-        # Configuration
+        # Configuration from environment variables
         self.model = os.getenv("CLAUDE_MODEL", "claude-3-sonnet-20240229")
-        self.max_tokens = int(os.getenv("MAX_TOKENS", "4000"))
-        self.temperature = float(os.getenv("TEMPERATURE", "0.7"))
+        self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", os.getenv("MAX_TOKENS", "4000")))
+        self.temperature = float(os.getenv("CLAUDE_TEMPERATURE", os.getenv("TEMPERATURE", "0.7")))
         
     def read_prompt(self, prompt_file: str = "/tmp/agent_prompt.txt") -> str:
         """Read the task prompt from a file."""
@@ -244,8 +244,11 @@ Format your response to make it easy to parse programmatically. Use markdown cod
         
         return changes
     
-    def apply_changes(self, response: str):
-        """Apply the changes suggested by Claude."""
+    def apply_changes(self, response: str) -> bool:
+        """
+        Apply the changes suggested by Claude.
+        Returns True if all changes were applied successfully, False otherwise.
+        """
         logger.info("Parsing Claude's response for file changes...")
         
         changes = self.parse_file_changes(response)
@@ -254,10 +257,11 @@ Format your response to make it easy to parse programmatically. Use markdown cod
             logger.warning("No file changes detected in Claude's response")
             logger.info("Claude's response:")
             print(response)
-            return
+            return True  # Not a failure - Claude might have provided instructions only
         
         logger.info(f"Found {len(changes)} file changes to apply")
         
+        errors = 0
         for change in changes:
             file_path = change['path']
             content = change['content']
@@ -283,10 +287,17 @@ Format your response to make it easy to parse programmatically. Use markdown cod
                 
             except Exception as e:
                 logger.error(f"❌ Failed to {action} {file_path}: {e}")
+                errors += 1
         
         # Also print the full response for reference
         logger.info("\nFull Claude response:")
         print(response)
+        
+        if errors > 0:
+            logger.error(f"Failed to apply {errors} out of {len(changes)} changes")
+            return False
+        
+        return True
 
 
 def main():
@@ -302,7 +313,11 @@ def main():
         result = agent.execute_task(prompt)
         
         # Apply changes
-        agent.apply_changes(result)
+        success = agent.apply_changes(result)
+        
+        if not success:
+            logger.error("Failed to apply some changes")
+            sys.exit(1)
         
     except Exception as e:
         logger.error(f"Agent execution failed: {e}")
