@@ -1,0 +1,40 @@
+Based on your current setup and 2025 trends, here
+  are tools worth considering:
+
+  1. State Management: Zustand
+
+  Replace Context API for complex state. Your auth
+  context and task polling would benefit from
+  Zustand's cleaner API:
+  - 50% less boilerplate than Context
+  - Built-in devtools
+  - Better performance (no unnecessary re-renders)
+
+  2. Data Fetching: TanStack Query
+
+  Perfect for your API calls and real-time polling:
+  - Automatic caching & background refetching
+  - Replace manual polling logic
+  - Built-in error/loading states
+  - Works great with Supabase
+
+  3. Form Handling: React Hook Form
+
+  For settings and task creation forms:
+  - Better performance than controlled inputs
+  - Built-in validation
+  - Works well with TypeScript
+
+  4. Animation: Motion (Framer Motion v12)
+
+  For task status transitions and UI feedback:
+  - Smooth transitions for your diff viewer
+  - Loading states and progress indicators
+  - Minimal bundle size impact
+
+  5. Testing: Vitest + Testing Library
+
+  Modern alternative to Jest:
+  - 10x faster test runs
+  - Native ESM support
+  - Same API as Jest

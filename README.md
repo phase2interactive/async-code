@@ -4,6 +4,10 @@ Use Claude Code / CodeX CLI to perform multiple tasks in parallel with a Codex-s
 
 A code agent task management system that provides parallel execution of AI-powered coding tasks. Users can run multiple Claude Code agents simultaneously through a Codex-style web interface, with support for different agents for comparison and evaluation.
 
+## E2B Migration
+
+This branch contains the E2B (e2b.dev) migration, replacing Docker containers with secure E2B sandboxes for AI code execution. See [E2B_INTEGRATION.md](server-e2b/E2B_INTEGRATION.md) for details.
+
 ![async-code-ui](https://github.com/user-attachments/assets/e490c605-681a-4abb-a440-323e15f1a90d)
 
 
@@ -16,16 +20,17 @@ A code agent task management system that provides parallel execution of AI-power
 - 🔄 **Parallel Task Management**: Execute multiple coding tasks simultaneously  
 - 🌐 **Codex-Style Web UI**: Clean interface for managing agent tasks
 - 🔍 **Agent Comparison**: Compare outputs from different AI models
-- 🐳 **Containerized Execution**: Secure sandboxed environment for each task
+- 🔒 **E2B Sandboxes**: Secure isolated environments (no Docker required)
 - 🔗 **Git Integration**: Automatic repository cloning, commits, and PR creation
 - **Selfhost**: Deploy you rown parallel code agent platform.
 
 ## Architecture
 
 - **Frontend**: Next.js with TypeScript and TailwindCSS
-- **Backend**: Python Flask API with Docker orchestration
+- **Backend**: Python Flask API with E2B sandbox integration
 - **Agents**: Claude Code (Anthropic) with extensible support for other models
-- **Task Management**: Parallel execution system based on container
+- **Task Management**: Parallel execution in secure E2B sandboxes
+- **Execution**: E2B sandboxes with automatic fallback to local simulation
 
 ## Security
 

@@ -15,19 +15,59 @@ from database import DatabaseOperations
 
 logger = logging.getLogger(__name__)
 
+# Check if E2B is properly configured
+try:
+    if os.getenv('E2B_API_KEY'):
+        # Use real E2B implementation if API key is available
+        from .code_task_e2b_real import run_ai_code_task_e2b as _real_run_ai_code_task_e2b
+        USE_REAL_E2B = True
+        logger.info("✅ Using real E2B implementation")
+    else:
+        USE_REAL_E2B = False
+        logger.warning("⚠️ E2B_API_KEY not found, using simulation mode")
+except ImportError as e:
+    USE_REAL_E2B = False
+    logger.warning(f"⚠️ Could not import E2B: {e}, using simulation mode")
 
-def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str):
+
+def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str, 
+                        repo_url: str = None, branch: str = None, 
+                        prompt: str = None, model: str = None, 
+                        project_id: Optional[int] = None):
     """
     Execute a code task using E2B sandbox.
-    This is a simplified version that uses subprocess to run commands.
+    Dispatches to real E2B implementation if available, otherwise uses simulation.
     """
     logger.info(f"Starting E2B execution for task {task_id}")
     
     try:
-        # Get task data
-        task_data = DatabaseOperations.get_task_by_id(task_id, user_id)
-        if not task_data:
-            raise Exception(f"Task {task_id} not found")
+        # Get task data if not provided
+        if not all([repo_url, branch, prompt, model]):
+            task_data = DatabaseOperations.get_task_by_id(task_id, user_id)
+            if not task_data:
+                raise Exception(f"Task {task_id} not found")
+            
+            repo_url = repo_url or task_data["repo_url"]
+            branch = branch or task_data.get("target_branch", "main")
+            prompt = prompt or (task_data["chat_messages"][0]["content"] if task_data.get("chat_messages") else "")
+            model = model or task_data.get("agent", "claude")
+        
+        # Use real E2B if available
+        if USE_REAL_E2B:
+            logger.info("🚀 Using real E2B implementation")
+            return _real_run_ai_code_task_e2b(
+                task_id=task_id,
+                user_id=user_id,
+                prompt=prompt,
+                repo_url=repo_url,
+                branch=branch,
+                github_token=github_token,
+                model=model,
+                project_id=project_id
+            )
+        
+        # Otherwise continue with simulation
+        logger.info("🔧 Using simulation mode (set E2B_API_KEY to use real E2B)")
         
         # Update status to running
         DatabaseOperations.update_task(task_id, user_id, {"status": "running"})
@@ -37,9 +77,8 @@ def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str):
             workspace_dir = os.path.join(temp_dir, "workspace")
             os.makedirs(workspace_dir)
             
-            # Clone repository
-            repo_url = task_data["repo_url"]
-            branch = task_data.get("target_branch", "main")
+            # Clone repository - use the parameters we have
+            # (repo_url and branch are already set from parameters or task_data above)
             
             # Add auth token to URL for private repos
             if "github.com" in repo_url and github_token:
@@ -48,7 +87,7 @@ def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str):
                 elif repo_url.startswith("git@"):
                     repo_url = repo_url.replace("git@github.com:", f"https://{github_token}@github.com/")
             
-            logger.info(f"Cloning repository: {task_data['repo_url']} (branch: {branch})")
+            logger.info(f"Cloning repository: {repo_url} (branch: {branch})")
             
             # Clone the repository
             clone_result = subprocess.run(
@@ -68,9 +107,9 @@ def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str):
             subprocess.run(["git", "config", "user.name", "AI Assistant"], check=True)
             subprocess.run(["git", "config", "user.email", "ai@example.com"], check=True)
             
-            # Get the prompt
-            prompt = task_data["chat_messages"][0]["content"] if task_data.get("chat_messages") else ""
-            agent = task_data.get("agent", "claude")
+            # Use the prompt and model we already have from parameters
+            # (prompt and model are already set from parameters or task_data above)
+            agent = model
             
             logger.info(f"Executing {agent} agent with prompt: {prompt[:100]}...")
             
