@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import logging
+import re
 from typing import Dict, List, Optional
 
 # Configure logging
@@ -150,22 +151,131 @@ After making changes, provide a clear summary of what was modified and why."""
             logger.error(f"Error executing task: {e}")
             return f"Error: {str(e)}"
     
+    def parse_file_changes(self, response: str) -> List[Dict[str, str]]:
+        """
+        Parse GPT's response to extract file changes.
+        Looks for various patterns that indicate file modifications.
+        """
+        changes = []
+        
+        # Pattern 1: Markdown code blocks with file paths
+        # ```python:path/to/file.py or ```path/to/file.py
+        pattern = r'```(?:[\w]+:)?([\w/.-]+)\n(.*?)```'
+        matches = re.findall(pattern, response, re.DOTALL)
+        
+        for file_path, content in matches:
+            # Skip generic code blocks without clear file paths
+            if '/' in file_path or file_path.endswith(('.py', '.js', '.ts', '.json', '.yml', '.yaml')):
+                changes.append({
+                    'path': file_path,
+                    'content': content.strip(),
+                    'action': 'create_or_update'
+                })
+        
+        # Pattern 2: Explicit file instructions
+        # "Create/Update/Modify file path/to/file:"
+        instruction_pattern = r'(Create|Update|Modify|Edit)\s+(?:the\s+)?file\s+([\w/.-]+)[:\s]'
+        instruction_matches = re.findall(instruction_pattern, response, re.IGNORECASE)
+        
+        for action, file_path in instruction_matches:
+            if not any(c['path'] == file_path for c in changes):
+                # Find content after this instruction
+                start_pattern = f"{action}.*?file\s+{re.escape(file_path)}"
+                start_match = re.search(start_pattern, response, re.IGNORECASE)
+                if start_match:
+                    start_idx = start_match.end()
+                    
+                    # Look for the next file instruction, code block, or section
+                    end_patterns = [
+                        r'\n(?:Create|Update|Modify|Edit)\s+(?:the\s+)?file',
+                        r'\n```',
+                        r'\n\n#+\s',  # Markdown headers
+                        r'\n\n\n'      # Triple newline
+                    ]
+                    
+                    end_idx = len(response)
+                    for pattern in end_patterns:
+                        match = re.search(pattern, response[start_idx:])
+                        if match:
+                            end_idx = min(end_idx, start_idx + match.start())
+                    
+                    content = response[start_idx:end_idx].strip()
+                    # Clean up common formatting
+                    content = re.sub(r'^[:\s]+', '', content)
+                    
+                    if content:
+                        changes.append({
+                            'path': file_path,
+                            'content': content,
+                            'action': action.lower()
+                        })
+        
+        # Pattern 3: File paths followed by code blocks
+        # "In file.py:\n```python\ncode\n```"
+        file_block_pattern = r'(?:In|File:|For)\s+([\w/.-]+)[:\s]*\n+```[\w]*\n(.*?)```'
+        file_block_matches = re.findall(file_block_pattern, response, re.DOTALL)
+        
+        for file_path, content in file_block_matches:
+            if not any(c['path'] == file_path for c in changes):
+                changes.append({
+                    'path': file_path,
+                    'content': content.strip(),
+                    'action': 'create_or_update'
+                })
+        
+        return changes
+    
     def apply_changes(self, instructions: str):
         """
         Parse the GPT response and apply file changes.
-        This is a simple implementation - could be enhanced with
-        better parsing of code blocks and file paths.
         """
-        logger.info("Analyzing GPT response for file changes...")
+        logger.info("Parsing GPT response for file changes...")
         
-        # This is a placeholder for more sophisticated parsing
-        # In practice, you might want to:
-        # 1. Parse markdown code blocks with file paths
-        # 2. Use GPT to generate structured output (JSON)
-        # 3. Implement a more robust change detection system
+        changes = self.parse_file_changes(instructions)
         
-        # For now, we'll just log the instructions
-        logger.info("GPT Response:")
+        if not changes:
+            logger.warning("No file changes detected in GPT's response")
+            logger.info("GPT Response:")
+            print(instructions)
+            return
+        
+        logger.info(f"Found {len(changes)} file changes to apply")
+        
+        for change in changes:
+            file_path = change['path']
+            content = change['content']
+            action = change['action']
+            
+            # Ensure path is relative to repo root
+            if not file_path.startswith('/'):
+                file_path = f"/workspace/repo/{file_path}"
+            elif not file_path.startswith('/workspace/repo/'):
+                file_path = f"/workspace/repo{file_path}"
+            
+            try:
+                # Create directory if needed
+                dir_path = os.path.dirname(file_path)
+                if not os.path.exists(dir_path):
+                    os.makedirs(dir_path, exist_ok=True)
+                    logger.info(f"Created directory: {dir_path}")
+                
+                # Check if file exists for update vs create
+                file_exists = os.path.exists(file_path)
+                
+                # Write the file
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                if file_exists:
+                    logger.info(f"✅ Updated file: {file_path}")
+                else:
+                    logger.info(f"✅ Created file: {file_path}")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to {action} {file_path}: {e}")
+        
+        # Also print the full response for reference
+        logger.info("\nFull GPT response:")
         print(instructions)
 
 
