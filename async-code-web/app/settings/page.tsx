@@ -7,16 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-
 import Link from "next/link";
+import { ApiService } from "@/lib/api-service";
 
 export default function SettingsPage() {
     const [githubToken, setGithubToken] = useState("");
     const [tokenValidation, setTokenValidation] = useState<{status: string; user?: string; repo?: {name?: string; permissions?: {read?: boolean; write?: boolean; create_branches?: boolean; admin?: boolean}}; error?: string} | null>(null);
     const [isValidatingToken, setIsValidatingToken] = useState(false);
     const [repoUrl, setRepoUrl] = useState("https://github.com/ObservedObserver/streamlit-react");
-
-    const API_BASE = '/api';
 
     // Initialize GitHub token from localStorage
     useEffect(() => {
@@ -47,18 +45,7 @@ export default function SettingsPage() {
 
         setIsValidatingToken(true);
         try {
-            const response = await fetch(`${API_BASE}/validate-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    github_token: githubToken,
-                    repo_url: repoUrl
-                })
-            });
-
-            const data = await response.json();
+            const data = await ApiService.validateGitHubToken(githubToken, repoUrl);
             setTokenValidation(data);
             
             if (data.status === 'success') {

@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://backend:5000/:path*', // Using Docker service name
+        destination: 'http://backend:8000/api/:path*', // Using Docker service name
       },
     ];
   },

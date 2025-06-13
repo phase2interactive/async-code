@@ -216,6 +216,7 @@ export class ApiService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...getAuthHeaders()
             },
             body: JSON.stringify({
                 github_token: token,
