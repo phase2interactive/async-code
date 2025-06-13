@@ -30,6 +30,9 @@ class E2BCodeExecutor:
         self.api_key = os.getenv('E2B_API_KEY')
         if not self.api_key:
             raise ValueError("E2B_API_KEY not found in environment variables")
+        
+        # Use custom template if available (speeds up execution by pre-installing dependencies)
+        self.template_id = os.getenv('E2B_TEMPLATE_ID')
     
     async def execute_task(self, task_id: int, user_id: str, github_token: str, 
                           repo_url: str, branch: str, prompt: str, agent: str) -> Dict:
@@ -55,16 +58,25 @@ class E2BCodeExecutor:
             
             # Create E2B sandbox with appropriate template
             logger.info(f"🚀 Creating E2B sandbox for task {task_id}")
+            if self.template_id:
+                logger.info(f"🌟 Using custom template: {self.template_id}")
+            
             try:
-                sandbox = await Sandbox.create(
-                    api_key=self.api_key,
-                    env_vars={
+                create_params = {
+                    "api_key": self.api_key,
+                    "env_vars": {
                         "GITHUB_TOKEN": github_token,
                         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY") if agent == "claude" else None,
                         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY") if agent == "codex" else None,
                     },
-                    timeout=self.SANDBOX_TIMEOUT
-                )
+                    "timeout": self.SANDBOX_TIMEOUT
+                }
+                
+                # Add template if configured
+                if self.template_id:
+                    create_params["template"] = self.template_id
+                
+                sandbox = await Sandbox.create(**create_params)
             except Exception as e:
                 if "quota" in str(e).lower():
                     raise Exception("E2B sandbox quota exceeded. Please check your E2B account limits.")
@@ -271,18 +283,33 @@ class E2BCodeExecutor:
     async def _run_claude_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Claude agent in the sandbox"""
         try:
-            # Install Claude CLI if needed
-            install_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
-                    "npm install -g @anthropic-ai/claude-cli"
-                ),
-                timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+            # Check if Claude CLI is already installed (in custom template)
+            check_result = await asyncio.wait_for(
+                sandbox.process.start_and_wait("which claude"),
+                timeout=5
             )
             
-            # Run Claude with the prompt
+            # Only install if not found
+            if check_result.exit_code != 0:
+                logger.info("📦 Installing Claude CLI...")
+                install_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        "npm install -g @anthropic-ai/claude-cli"
+                    ),
+                    timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+                )
+            else:
+                logger.info("✅ Claude CLI already installed")
+            
+            # Write prompt to file to avoid shell injection
+            prompt_file = "/tmp/claude_prompt.txt"
+            await sandbox.filesystem.write(prompt_file, prompt)
+            
+            # Run Claude with the prompt from file
+            # Note: Claude CLI doesn't have --prompt-file, so we use stdin redirect
             claude_result = await asyncio.wait_for(
                 sandbox.process.start_and_wait(
-                    f'cd /workspace/repo && claude "{prompt}"'
+                    f'cd /workspace/repo && claude < {prompt_file}'
                 ),
                 timeout=self.AGENT_TIMEOUT
             )
@@ -326,13 +353,23 @@ print(response.choices[0].message.content)
         await sandbox.filesystem.write("/tmp/codex_agent.py", script)
         
         try:
-            # Install OpenAI if needed
-            await asyncio.wait_for(
-                sandbox.process.start_and_wait(
-                    "pip install openai"
-                ),
-                timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+            # Check if OpenAI is already installed (in custom template)
+            check_result = await asyncio.wait_for(
+                sandbox.process.start_and_wait("python3 -c 'import openai'"),
+                timeout=5
             )
+            
+            # Only install if not found
+            if check_result.exit_code != 0:
+                logger.info("📦 Installing OpenAI SDK...")
+                await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        "pip install openai"
+                    ),
+                    timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+                )
+            else:
+                logger.info("✅ OpenAI SDK already installed")
             
             # Run the agent
             codex_result = await asyncio.wait_for(
