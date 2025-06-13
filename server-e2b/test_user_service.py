@@ -50,10 +50,10 @@ class TestUserService:
             supabase_service_key: Service role key for admin operations
         """
         self.supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
-        self.supabase_service_key = supabase_service_key or os.environ.get("SUPABASE_SERVICE_KEY")
+        self.supabase_service_key = supabase_service_key or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         
         if not all([self.supabase_url, self.supabase_service_key]):
-            raise ValueError("Missing required configuration: SUPABASE_URL or SUPABASE_SERVICE_KEY")
+            raise ValueError("Missing required configuration: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
         
         # Create Supabase client with service role key
         self.supabase: Client = create_client(

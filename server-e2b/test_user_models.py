@@ -7,20 +7,26 @@ to ensure data consistency and validation.
 
 from typing import Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, Field, validator
+from email_validator import validate_email, EmailNotValidError
 
 
 class TestUserCreateRequest(BaseModel):
     """Request model for creating a test user"""
-    email: Optional[EmailStr] = Field(None, description="Test user email (must use .test TLD)")
+    email: Optional[str] = Field(None, description="Test user email (must use .test TLD)")
     user_id: Optional[str] = Field(None, description="Specific user ID to use")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
     
     @validator('email')
     def validate_test_email(cls, v):
-        """Ensure email uses .test TLD"""
-        if v and not v.endswith('.test'):
-            raise ValueError('Test user email must use .test TLD for safety')
+        """Ensure email uses .test TLD and has valid format"""
+        if v:
+            # Check basic email format
+            if '@' not in v:
+                raise ValueError('Invalid email format')
+            # Ensure it uses .test TLD
+            if not v.endswith('.test'):
+                raise ValueError('Test user email must use .test TLD for safety')
         return v
 
 
