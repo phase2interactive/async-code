@@ -71,3 +71,16 @@ If the AI response is not valid JSON or missing required fields:
 1. The agent will log an error
 2. The task will fail with exit code 1
 3. An error message will be displayed to the user
+
+### API Error Responses
+
+When API calls fail (rate limits, authentication errors, etc.), both agents return a valid JSON response with an error summary:
+
+```json
+{
+  "summary": "Error: API rate limit exceeded. Please try again later.",
+  "file_operations": []
+}
+```
+
+This ensures consistent error handling throughout the pipeline, as `apply_changes()` always receives valid JSON to parse.
