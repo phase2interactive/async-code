@@ -62,8 +62,8 @@ def after_request(response):
 
 # Register blueprints
 app.register_blueprint(health_bp)
-app.register_blueprint(tasks_bp)
-app.register_blueprint(projects_bp)
+app.register_blueprint(tasks_bp, url_prefix='/api')
+app.register_blueprint(projects_bp, url_prefix='/api')
 
 # Register test user endpoints (only in non-production)
 if os.environ.get("ENVIRONMENT") != "production":
@@ -126,7 +126,7 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8000))
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
     logger.info(f"Starting Flask server on port {port}")
