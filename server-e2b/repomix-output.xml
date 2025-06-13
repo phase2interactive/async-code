@@ -40,15 +40,20 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+e2b-template/
+  build-template.sh
+  Dockerfile
+  e2b.toml
+  README.md
 utils/
+  agent_scripts/
+    codex_agent.py
+    README.md
   __init__.py
   async_runner.py
   code_task_e2b_real.py
   code_task_e2b.py
-  code_task_v1.py
-  code_task_v2.py
-  container.py
-  secure_exec.py
+  git_utils.py
   validators.py
 .env.example
 auth.py
@@ -67,6 +72,7 @@ README.md
 requirements.txt
 run.sh
 tasks.py
+temp_conversation_with_sr_arch.txt
 test_api_simple.sh
 test_auth_header.py
 test_backend.py
@@ -84,12 +90,430 @@ test_users.py
 <files>
 This section contains the contents of the repository's files.
 
-<file path="utils/__init__.py">
+<file path="e2b-template/build-template.sh">
+#!/bin/bash
+# Build and publish the custom E2B template
+
+set -e
+
+echo "🔨 Building custom E2B template for async-code agents..."
+
+# Check if E2B CLI is installed
+if ! command -v e2b &> /dev/null; then
+    echo "❌ E2B CLI not found. Installing..."
+    npm install -g @e2b/cli
+fi
+
+# Build the template
+echo "📦 Building template..."
+e2b template build
+
+# Get the template ID
+TEMPLATE_ID=$(e2b template list | grep "async-code-agents" | awk '{print $1}')
+
+if [ -z "$TEMPLATE_ID" ]; then
+    echo "❌ Failed to build template"
+    exit 1
+fi
+
+echo "✅ Template built successfully!"
+echo "📝 Template ID: $TEMPLATE_ID"
+echo ""
+echo "To use this template, update code_task_e2b_real.py:"
+echo "  await Sandbox.create(template='$TEMPLATE_ID', ...)"
+</file>
+
+<file path="e2b-template/Dockerfile">
+# Custom E2B template for async-code agents
+# This template pre-installs all required dependencies to speed up task execution
+
+FROM e2b/default:latest
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir \
+    openai \
+    anthropic \
+    requests
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-cli
+
+# Create workspace directory
+RUN mkdir -p /workspace
+
+# Set working directory
+WORKDIR /workspace
+
+# Verify installations
+RUN echo "=== Installed versions ===" && \
+    echo "Node.js: $(node --version)" && \
+    echo "npm: $(npm --version)" && \
+    echo "Python: $(python3 --version)" && \
+    echo "pip: $(pip3 --version)" && \
+    echo "git: $(git --version)" && \
+    echo "Claude CLI: $(claude --version 2>/dev/null || echo 'Not installed correctly')"
+
+# Set environment
+ENV PYTHONUNBUFFERED=1
+ENV NODE_ENV=production
+</file>
+
+<file path="e2b-template/e2b.toml">
+# E2B sandbox template configuration
+# This template is used for AI agent execution environments
+
+# Template configuration
+template_id = "async-code-agents"
+dockerfile = "./Dockerfile"
+
+# Runtime settings
+python_version = "3.11"
+node_version = "18"
+</file>
+
+<file path="e2b-template/README.md">
+# E2B Custom Template for Async-Code Agents
+
+This directory contains the custom E2B sandbox template that pre-installs all dependencies required for AI agent execution.
+
+## Why Custom Template?
+
+Without a custom template, every task execution would need to:
+- Install Node.js packages (`npm install -g @anthropic-ai/claude-cli`)
+- Install Python packages (`pip install openai`)
+
+This adds 30-60 seconds of overhead per task and increases costs.
+
+## Pre-installed Dependencies
+
+The custom template includes:
+- Git
+- Node.js 18 & npm
+- Python 3.11 & pip
+- Claude CLI (`@anthropic-ai/claude-cli`)
+- OpenAI Python SDK
+- Anthropic Python SDK
+
+## Building the Template
+
+1. Ensure you have E2B CLI installed:
+   ```bash
+   npm install -g @e2b/cli
+   ```
+
+2. Authenticate with E2B:
+   ```bash
+   e2b auth login
+   ```
+
+3. Build the template:
+   ```bash
+   ./build-template.sh
+   ```
+
+4. The script will output a template ID like `async-code-agents-xxxxx`
+
+## Using the Template
+
+Update `server-e2b/utils/code_task_e2b_real.py` to use the custom template:
+
+```python
+# Add at the top of the file
+E2B_TEMPLATE_ID = os.getenv('E2B_TEMPLATE_ID', 'async-code-agents-xxxxx')
+
+# In the execute_task method
+sandbox = await Sandbox.create(
+    template=E2B_TEMPLATE_ID,  # Add this line
+    api_key=self.api_key,
+    env_vars={...},
+    timeout=self.SANDBOX_TIMEOUT
+)
+```
+
+## Environment Variable
+
+Add to your `.env`:
+```
+E2B_TEMPLATE_ID=async-code-agents-xxxxx
+```
+
+## Updating the Template
+
+If you need to add new dependencies:
+
+1. Edit `Dockerfile`
+2. Run `./build-template.sh`
+3. Update `E2B_TEMPLATE_ID` in your `.env`
+</file>
+
+<file path="utils/agent_scripts/codex_agent.py">
+#!/usr/bin/env python3
+"""
+Codex/GPT Agent Script for E2B Sandbox Execution.
+
+This script is uploaded to the E2B sandbox and executed to run GPT-based
+code generation tasks. It reads configuration from environment variables
+and the task prompt from a file.
+"""
+import os
+import sys
+import json
 import logging
-import threading
-import fcntl
-import queue
-import atexit
+from typing import Dict, List, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+try:
+    import openai
+except ImportError:
+    logger.error("OpenAI library not found. Please install it with: pip install openai")
+    sys.exit(1)
+
+
+class CodexAgent:
+    """Handles GPT-based code generation tasks."""
+    
+    def __init__(self):
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set")
+        
+        # Configure OpenAI
+        openai.api_key = self.api_key
+        
+        # Configuration
+        self.model = os.getenv("GPT_MODEL", "gpt-4")
+        self.max_tokens = int(os.getenv("MAX_TOKENS", "2000"))
+        self.temperature = float(os.getenv("TEMPERATURE", "0.7"))
+        
+    def read_prompt(self, prompt_file: str = "/tmp/agent_prompt.txt") -> str:
+        """Read the task prompt from a file."""
+        try:
+            with open(prompt_file, 'r') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            logger.error(f"Prompt file not found: {prompt_file}")
+            raise
+        except Exception as e:
+            logger.error(f"Error reading prompt file: {e}")
+            raise
+    
+    def analyze_repository(self) -> Dict[str, List[str]]:
+        """Analyze the repository structure to provide context."""
+        repo_info = {
+            "files": [],
+            "directories": [],
+            "languages": set()
+        }
+        
+        try:
+            for root, dirs, files in os.walk("/workspace/repo"):
+                # Skip hidden directories
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                
+                for file in files:
+                    if not file.startswith('.'):
+                        file_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(file_path, "/workspace/repo")
+                        repo_info["files"].append(relative_path)
+                        
+                        # Detect language by extension
+                        ext = os.path.splitext(file)[1].lower()
+                        if ext in ['.py', '.js', '.ts', '.java', '.cpp', '.c', '.go', '.rs']:
+                            repo_info["languages"].add(ext[1:])
+                
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    relative_path = os.path.relpath(dir_path, "/workspace/repo")
+                    repo_info["directories"].append(relative_path)
+        
+        except Exception as e:
+            logger.warning(f"Error analyzing repository: {e}")
+        
+        repo_info["languages"] = list(repo_info["languages"])
+        return repo_info
+    
+    def generate_system_prompt(self, repo_info: Dict) -> str:
+        """Generate a system prompt with repository context."""
+        languages = ", ".join(repo_info["languages"]) if repo_info["languages"] else "unknown"
+        file_count = len(repo_info["files"])
+        
+        return f"""You are an expert coding assistant working on a {languages} project.
+The repository contains {file_count} files. You have full access to read and modify any file.
+
+Your task is to implement the requested changes following these guidelines:
+1. Write clean, idiomatic code that matches the existing style
+2. Add appropriate error handling and validation
+3. Include necessary imports and dependencies
+4. Ensure backward compatibility unless breaking changes are explicitly requested
+5. Add comments for complex logic
+6. Follow the project's existing patterns and conventions
+
+After making changes, provide a clear summary of what was modified and why."""
+    
+    def execute_task(self, prompt: str) -> str:
+        """Execute the code generation task using GPT."""
+        try:
+            # Analyze repository for context
+            repo_info = self.analyze_repository()
+            system_prompt = self.generate_system_prompt(repo_info)
+            
+            # Add file list to user prompt for better context
+            enhanced_prompt = f"{prompt}\n\nRepository structure:\n"
+            enhanced_prompt += f"Languages detected: {', '.join(repo_info['languages'])}\n"
+            enhanced_prompt += f"Total files: {len(repo_info['files'])}\n"
+            
+            # Include some key files in context
+            key_files = [f for f in repo_info['files'] 
+                        if any(name in f.lower() for name in ['readme', 'package.json', 'requirements.txt', 'main', 'index'])]
+            if key_files:
+                enhanced_prompt += f"Key files: {', '.join(key_files[:5])}\n"
+            
+            logger.info(f"Executing task with model: {self.model}")
+            
+            # Make API call
+            response = openai.ChatCompletion.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": enhanced_prompt}
+                ],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature
+            )
+            
+            return response.choices[0].message.content
+            
+        except openai.error.RateLimitError:
+            logger.error("OpenAI API rate limit exceeded")
+            return "Error: API rate limit exceeded. Please try again later."
+        except openai.error.AuthenticationError:
+            logger.error("OpenAI API authentication failed")
+            return "Error: Invalid API key"
+        except Exception as e:
+            logger.error(f"Error executing task: {e}")
+            return f"Error: {str(e)}"
+    
+    def apply_changes(self, instructions: str):
+        """
+        Parse the GPT response and apply file changes.
+        This is a simple implementation - could be enhanced with
+        better parsing of code blocks and file paths.
+        """
+        logger.info("Analyzing GPT response for file changes...")
+        
+        # This is a placeholder for more sophisticated parsing
+        # In practice, you might want to:
+        # 1. Parse markdown code blocks with file paths
+        # 2. Use GPT to generate structured output (JSON)
+        # 3. Implement a more robust change detection system
+        
+        # For now, we'll just log the instructions
+        logger.info("GPT Response:")
+        print(instructions)
+
+
+def main():
+    """Main entry point for the Codex agent."""
+    try:
+        agent = CodexAgent()
+        
+        # Read prompt
+        prompt = agent.read_prompt()
+        logger.info(f"Task prompt: {prompt[:100]}...")
+        
+        # Execute task
+        result = agent.execute_task(prompt)
+        
+        # Apply changes (currently just prints)
+        agent.apply_changes(result)
+        
+    except Exception as e:
+        logger.error(f"Agent execution failed: {e}")
+        print(f"Error: {str(e)}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="utils/agent_scripts/README.md">
+# Agent Scripts
+
+This directory contains sophisticated agent scripts that are uploaded to E2B sandboxes for execution.
+
+## Overview
+
+Instead of generating agent code inline, we maintain reusable scripts here that can:
+- Be tested independently
+- Handle complex scenarios
+- Provide better error handling
+- Be versioned and improved over time
+
+## Scripts
+
+### codex_agent.py
+
+A sophisticated GPT/Codex agent that:
+- Analyzes repository structure for context
+- Generates appropriate system prompts
+- Handles API errors gracefully
+- Supports configuration via environment variables
+- Reads prompts from files (avoiding injection issues)
+
+## Usage
+
+The scripts are automatically uploaded to E2B sandboxes when needed. The main code in `code_task_e2b_real.py` reads these scripts and uploads them to the sandbox filesystem before execution.
+
+## Adding New Agents
+
+To add a new agent:
+
+1. Create a new Python script in this directory
+2. Follow the pattern of reading configuration from environment variables
+3. Read the task prompt from `/tmp/agent_prompt.txt`
+4. Output results to stdout
+5. Update the corresponding method in `code_task_e2b_real.py`
+
+## Environment Variables
+
+Agents should read configuration from environment variables:
+- `OPENAI_API_KEY` - OpenAI API key
+- `ANTHROPIC_API_KEY` - Anthropic API key
+- `GPT_MODEL` - Model to use (default: gpt-4)
+- `MAX_TOKENS` - Maximum tokens for response
+- `TEMPERATURE` - Temperature for generation
+
+## Security
+
+- Always read prompts from files, never from command line arguments
+- Validate all inputs
+- Handle errors gracefully
+- Don't expose sensitive information in error messages
+</file>
+
+<file path="utils/__init__.py">
+"""
+Utils module for AI code task execution.
+"""
+import logging
 
 # Import E2B implementation
 from .code_task_e2b import run_ai_code_task_e2b
@@ -98,83 +522,10 @@ from .code_task_e2b import run_ai_code_task_e2b
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# For backward compatibility, we'll keep the queue structure for Codex tasks
-# but it will use E2B sandboxes instead of Docker containers
-
-# Global Codex execution queue and lock for sequential processing
-codex_execution_queue = queue.Queue()
-codex_execution_lock = threading.Lock()
-codex_worker_thread = None
-codex_lock_file = '/tmp/codex_global_lock'
-
-def init_codex_sequential_processor():
-    """Initialize the sequential Codex processor"""
-    global codex_worker_thread
-    
-    def codex_worker():
-        """Worker thread that processes Codex tasks sequentially"""
-        logger.info("🔄 Codex sequential worker thread started")
-        
-        while True:
-            try:
-                # Get the next task from the queue (blocks if empty)
-                task_data = codex_execution_queue.get(timeout=1.0)
-                if task_data is None:  # Poison pill to stop the thread
-                    logger.info("🛑 Codex worker thread stopping")
-                    break
-                    
-                task_id, user_id, github_token = task_data
-                logger.info(f"🎯 Processing Codex task {task_id} sequentially")
-                
-                # Acquire file-based lock for additional safety
-                try:
-                    with open(codex_lock_file, 'w') as lock_file:
-                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                        logger.info(f"🔒 Global Codex lock acquired for task {task_id}")
-                        
-                        # Execute the task using E2B
-                        run_ai_code_task_e2b(task_id, user_id, github_token)
-                            
-                        logger.info(f"✅ Codex task {task_id} completed")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Error executing Codex task {task_id}: {e}")
-                finally:
-                    codex_execution_queue.task_done()
-                    
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"❌ Error in Codex worker thread: {e}")
-                
-    # Start the worker thread if not already running
-    with codex_execution_lock:
-        if codex_worker_thread is None or not codex_worker_thread.is_alive():
-            codex_worker_thread = threading.Thread(target=codex_worker, daemon=True)
-            codex_worker_thread.start()
-            logger.info("🚀 Codex sequential processor initialized")
-
-def queue_codex_task(task_id, user_id, github_token):
-    """Queue a Codex task for sequential execution"""
-    init_codex_sequential_processor()
-    
-    logger.info(f"📋 Queuing Codex task {task_id} for sequential execution")
-    codex_execution_queue.put((task_id, user_id, github_token))
-    
-    # Wait for the task to be processed
-    logger.info(f"⏳ Waiting for Codex task {task_id} to be processed...")
-    codex_execution_queue.join()
-
-# Cleanup function to stop the worker thread
-def cleanup_codex_processor():
-    """Clean up the Codex processor on exit"""
-    global codex_worker_thread
-    if codex_worker_thread and codex_worker_thread.is_alive():
-        logger.info("🧹 Shutting down Codex sequential processor")
-        codex_execution_queue.put(None)  # Poison pill
-        codex_worker_thread.join(timeout=5.0)
-
-atexit.register(cleanup_codex_processor)
+# Note: The codex_execution_queue has been removed as it's no longer needed with E2B.
+# E2B sandboxes are isolated and can run concurrently without resource conflicts.
+# If rate limiting is needed for API calls, it should be implemented at the API
+# client level rather than queueing entire task executions.
 </file>
 
 <file path="utils/async_runner.py">
@@ -284,6 +635,7 @@ from database import DatabaseOperations
 from models import TaskStatus
 import subprocess
 from .async_runner import run_async_task
+from .git_utils import parse_file_changes
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +652,9 @@ class E2BCodeExecutor:
         self.api_key = os.getenv('E2B_API_KEY')
         if not self.api_key:
             raise ValueError("E2B_API_KEY not found in environment variables")
+        
+        # Use custom template if available (speeds up execution by pre-installing dependencies)
+        self.template_id = os.getenv('E2B_TEMPLATE_ID')
     
     async def execute_task(self, task_id: int, user_id: str, github_token: str, 
                           repo_url: str, branch: str, prompt: str, agent: str) -> Dict:
@@ -325,16 +680,25 @@ class E2BCodeExecutor:
             
             # Create E2B sandbox with appropriate template
             logger.info(f"🚀 Creating E2B sandbox for task {task_id}")
+            if self.template_id:
+                logger.info(f"🌟 Using custom template: {self.template_id}")
+            
             try:
-                sandbox = await Sandbox.create(
-                    api_key=self.api_key,
-                    env_vars={
+                create_params = {
+                    "api_key": self.api_key,
+                    "env_vars": {
                         "GITHUB_TOKEN": github_token,
                         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY") if agent == "claude" else None,
                         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY") if agent == "codex" else None,
                     },
-                    timeout=self.SANDBOX_TIMEOUT
-                )
+                    "timeout": self.SANDBOX_TIMEOUT
+                }
+                
+                # Add template if configured
+                if self.template_id:
+                    create_params["template"] = self.template_id
+                
+                sandbox = await Sandbox.create(**create_params)
             except Exception as e:
                 if "quota" in str(e).lower():
                     raise Exception("E2B sandbox quota exceeded. Please check your E2B account limits.")
@@ -541,18 +905,33 @@ class E2BCodeExecutor:
     async def _run_claude_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Claude agent in the sandbox"""
         try:
-            # Install Claude CLI if needed
-            install_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
-                    "npm install -g @anthropic-ai/claude-cli"
-                ),
-                timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+            # Check if Claude CLI is already installed (in custom template)
+            check_result = await asyncio.wait_for(
+                sandbox.process.start_and_wait("which claude"),
+                timeout=5
             )
             
-            # Run Claude with the prompt
+            # Only install if not found
+            if check_result.exit_code != 0:
+                logger.info("📦 Installing Claude CLI...")
+                install_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        "npm install -g @anthropic-ai/claude-cli"
+                    ),
+                    timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+                )
+            else:
+                logger.info("✅ Claude CLI already installed")
+            
+            # Write prompt to file to avoid shell injection
+            prompt_file = "/tmp/claude_prompt.txt"
+            await sandbox.filesystem.write(prompt_file, prompt)
+            
+            # Run Claude with the prompt from file
+            # Note: Claude CLI doesn't have --prompt-file, so we use stdin redirect
             claude_result = await asyncio.wait_for(
                 sandbox.process.start_and_wait(
-                    f'cd /workspace/repo && claude "{prompt}"'
+                    f'cd /workspace/repo && claude < {prompt_file}'
                 ),
                 timeout=self.AGENT_TIMEOUT
             )
@@ -573,8 +952,20 @@ class E2BCodeExecutor:
     
     async def _run_codex_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Codex/GPT agent in the sandbox"""
-        # Create a Python script to run OpenAI
-        script = f'''
+        # Read the sophisticated agent script
+        agent_script_path = os.path.join(
+            os.path.dirname(__file__), 
+            'agent_scripts', 
+            'codex_agent.py'
+        )
+        
+        # Use the sophisticated script if it exists, otherwise fall back to simple version
+        if os.path.exists(agent_script_path):
+            with open(agent_script_path, 'r') as f:
+                script = f.read()
+        else:
+            # Fallback simple script
+            script = f'''
 import openai
 import os
 import json
@@ -592,17 +983,28 @@ response = openai.ChatCompletion.create(
 print(response.choices[0].message.content)
 '''
         
-        # Write and execute the script
+        # Write the script and prompt to sandbox
         await sandbox.filesystem.write("/tmp/codex_agent.py", script)
+        await sandbox.filesystem.write("/tmp/agent_prompt.txt", prompt)
         
         try:
-            # Install OpenAI if needed
-            await asyncio.wait_for(
-                sandbox.process.start_and_wait(
-                    "pip install openai"
-                ),
-                timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+            # Check if OpenAI is already installed (in custom template)
+            check_result = await asyncio.wait_for(
+                sandbox.process.start_and_wait("python3 -c 'import openai'"),
+                timeout=5
             )
+            
+            # Only install if not found
+            if check_result.exit_code != 0:
+                logger.info("📦 Installing OpenAI SDK...")
+                await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        "pip install openai"
+                    ),
+                    timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
+                )
+            else:
+                logger.info("✅ OpenAI SDK already installed")
             
             # Run the agent
             codex_result = await asyncio.wait_for(
@@ -659,54 +1061,6 @@ def run_ai_code_task_e2b(task_id: int, user_id: str, prompt: str,
         logger.error(f"❌ E2B task {task_id} failed: {str(e)}")
         DatabaseOperations.update_task(task_id, user_id, {"status": "failed", "error": str(e)})
         raise
-
-
-def parse_file_changes(git_diff: str) -> List[Dict[str, Any]]:
-    """Parse git diff to extract individual file changes"""
-    file_changes = []
-    current_file = None
-    before_lines = []
-    after_lines = []
-    in_diff = False
-    
-    for line in git_diff.split('\n'):
-        if line.startswith('diff --git'):
-            # Save previous file if exists
-            if current_file:
-                file_changes.append({
-                    "path": current_file,
-                    "before": '\n'.join(before_lines),
-                    "after": '\n'.join(after_lines)
-                })
-            
-            # Extract filename
-            parts = line.split(' ')
-            if len(parts) >= 4:
-                current_file = parts[3][2:] if parts[3].startswith('b/') else parts[3]
-            before_lines = []
-            after_lines = []
-            in_diff = False
-            
-        elif line.startswith('@@'):
-            in_diff = True
-        elif in_diff and current_file:
-            if line.startswith('-') and not line.startswith('---'):
-                before_lines.append(line[1:])
-            elif line.startswith('+') and not line.startswith('+++'):
-                after_lines.append(line[1:])
-            elif not line.startswith('\\'):
-                before_lines.append(line[1:] if line else '')
-                after_lines.append(line[1:] if line else '')
-    
-    # Save last file
-    if current_file:
-        file_changes.append({
-            "path": current_file,
-            "before": '\n'.join(before_lines),
-            "after": '\n'.join(after_lines)
-        })
-    
-    return file_changes
 </file>
 
 <file path="utils/code_task_e2b.py">
@@ -724,6 +1078,7 @@ import subprocess
 import tempfile
 
 from database import DatabaseOperations
+from .git_utils import parse_file_changes
 
 logger = logging.getLogger(__name__)
 
@@ -937,10 +1292,25 @@ def simulate_ai_execution(workspace_dir: str, prompt: str, agent: str) -> Dict[s
             "success": False,
             "error": str(e)
         }
+</file>
+
+<file path="utils/git_utils.py">
+"""
+Git-related utility functions.
+"""
+from typing import List, Dict, Any
 
 
 def parse_file_changes(git_diff: str) -> List[Dict[str, Any]]:
-    """Parse git diff to extract individual file changes"""
+    """
+    Parse git diff to extract individual file changes.
+    
+    Args:
+        git_diff: Raw git diff output
+        
+    Returns:
+        List of dicts with 'path', 'before', and 'after' content for each file
+    """
     file_changes = []
     current_file = None
     before_lines = []
@@ -985,1221 +1355,6 @@ def parse_file_changes(git_diff: str) -> List[Dict[str, Any]]:
         })
     
     return file_changes
-</file>
-
-<file path="utils/code_task_v1.py">
-import json
-import os
-import logging
-import docker
-import docker.types
-import uuid
-import time
-from models import TaskStatus
-
-from .container import cleanup_orphaned_containers
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import get_container_user_mapping, get_workspace_path, get_security_options, CONTAINER_UID, CONTAINER_GID
-from utils.validators import TaskInputValidator
-from utils.secure_exec import create_safe_docker_script
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Docker client
-docker_client = docker.from_env()
-
-# Legacy in-memory task storage (for backward compatibility)
-tasks = {}
-
-# Simple persistence for tasks (save to file)
-TASKS_FILE = 'tasks_backup.json'
-
-def save_tasks():
-    """Save tasks to file for persistence"""
-    try:
-        with open(TASKS_FILE, 'w') as f:
-            json.dump(tasks, f, indent=2, default=str)
-        logger.info(f"💾 Saved {len(tasks)} tasks to {TASKS_FILE}")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to save tasks: {e}")
-
-def load_tasks():
-    """Load tasks from file"""
-    global tasks
-    try:
-        if os.path.exists(TASKS_FILE):
-            with open(TASKS_FILE, 'r') as f:
-                tasks = json.load(f)
-            logger.info(f"📂 Loaded {len(tasks)} tasks from {TASKS_FILE}")
-        else:
-            logger.info(f"📂 No tasks file found, starting fresh")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to load tasks: {e}")
-        tasks = {}
-
-
-# Load tasks on startup
-load_tasks()
-
-# Legacy function for backward compatibility
-def run_ai_code_task(task_id):
-    """Legacy function - should not be used with new Supabase system"""
-    logger.warning(f"Legacy run_ai_code_task called for task {task_id} - this should be migrated to use run_ai_code_task_v2")
-    
-    try:
-        # Check if task exists and get model type
-        if task_id not in tasks:
-            logger.error(f"Task {task_id} not found in tasks")
-            return
-            
-        task = tasks[task_id]
-        model_cli = task.get('model', 'claude')
-        
-        # With comprehensive sandboxing fixes, both Claude and Codex can now run in parallel
-        logger.info(f"🚀 Running legacy {model_cli.upper()} task {task_id} directly in parallel mode")
-        return _run_ai_code_task_internal(task_id)
-            
-    except Exception as e:
-        logger.error(f"💥 Exception in run_ai_code_task: {str(e)}")
-        if task_id in tasks:
-            tasks[task_id]['status'] = TaskStatus.FAILED
-            tasks[task_id]['error'] = str(e)
-
-def _run_ai_code_task_internal(task_id):
-    """Internal implementation of legacy AI Code automation - called directly for Claude or via queue for Codex"""
-    try:
-        task = tasks[task_id]
-        task['status'] = TaskStatus.RUNNING
-        
-        model_name = task.get('model', 'claude').upper()
-        logger.info(f"🚀 Starting {model_name} Code task {task_id}")
-        
-        # Validate inputs using Pydantic model
-        try:
-            validated_inputs = TaskInputValidator(
-                task_id=str(task_id),
-                repo_url=task['repo_url'],
-                target_branch=task['branch'],
-                prompt=task['prompt'],
-                model=task.get('model', 'claude'),
-                github_username=task.get('github_username')
-            )
-        except Exception as validation_error:
-            error_msg = f"Input validation failed: {str(validation_error)}"
-            logger.error(error_msg)
-            task['status'] = TaskStatus.FAILED
-            task['error'] = error_msg
-            save_tasks()
-            return
-        
-        logger.info(f"📋 Task details: prompt='{validated_inputs.prompt[:50]}...', repo={validated_inputs.repo_url}, branch={validated_inputs.target_branch}, model={model_name}")
-        logger.info(f"Starting {model_name} task {task_id}")
-        
-        # Create container environment variables
-        env_vars = {
-            'CI': 'true',  # Indicate we're in CI/non-interactive environment
-            'TERM': 'dumb',  # Use dumb terminal to avoid interactive features
-            'NO_COLOR': '1',  # Disable colors for cleaner output
-            'FORCE_COLOR': '0',  # Disable colors for cleaner output
-            'NONINTERACTIVE': '1',  # Common flag for non-interactive mode
-            'DEBIAN_FRONTEND': 'noninteractive',  # Non-interactive package installs
-        }
-        
-        # Add model-specific API keys and environment variables
-        model_cli = validated_inputs.model
-        if model_cli == 'claude':
-            env_vars.update({
-                'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
-                'ANTHROPIC_NONINTERACTIVE': '1'  # Custom flag for Anthropic tools
-            })
-        elif model_cli == 'codex':
-            env_vars.update({
-                'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-                'OPENAI_NONINTERACTIVE': '1',  # Custom flag for OpenAI tools
-                'CODEX_QUIET_MODE': '1'  # Official Codex non-interactive flag
-            })
-        
-        # Use specialized container images based on model
-        if model_cli == 'codex':
-            container_image = 'codex-automation:latest'
-        else:
-            container_image = 'claude-code-automation:latest'
-        
-        # Ensure workspace permissions for non-root container execution
-        workspace_path = get_workspace_path(task_id)
-        try:
-            os.makedirs(workspace_path, exist_ok=True)
-            # Set ownership to configured UID/GID for container user
-            os.chown(workspace_path, CONTAINER_UID, CONTAINER_GID)
-            logger.info(f"🔧 Created workspace with proper permissions: {workspace_path} (UID:{CONTAINER_UID}, GID:{CONTAINER_GID})")
-        except Exception as e:
-            logger.warning(f"⚠️  Could not set workspace permissions: {e}")
-        
-        # Create the command to run in container using secure method
-        container_command = create_safe_docker_script(
-            repo_url=validated_inputs.repo_url,
-            branch=validated_inputs.target_branch,
-            prompt=validated_inputs.prompt,
-            model_cli=validated_inputs.model,
-            github_username=validated_inputs.github_username
-        )
-        
-        # Run container with unified AI Code tools (supports both Claude and Codex)
-        logger.info(f"🐳 Creating Docker container for task {task_id} using {container_image} (model: {model_name})")
-        
-        # Configure Docker security options for Codex compatibility
-        container_kwargs = {
-            'image': container_image,
-            'command': ['bash', '-c', container_command],
-            'environment': env_vars,
-            'detach': True,
-            'remove': False,  # Don't auto-remove so we can get logs
-            'working_dir': '/workspace',
-            'network_mode': 'bridge',  # Ensure proper networking
-            'tty': False,  # Don't allocate TTY - may prevent clean exit
-            'stdin_open': False,  # Don't keep stdin open - may prevent clean exit
-            'name': f'ai-code-task-{task_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}',  # Highly unique container name with UUID
-            'mem_limit': '2g',  # Limit memory usage to prevent resource conflicts
-            'cpu_shares': 1024,  # Standard CPU allocation
-            'ulimits': [docker.types.Ulimit(name='nofile', soft=1024, hard=2048)],  # File descriptor limits
-            'volumes': {
-                workspace_path: {'bind': '/workspace/tmp', 'mode': 'rw'}  # Mount workspace with proper permissions
-            }
-        }
-        
-        # Add security configurations for better isolation
-        logger.info(f"🔒 Running {model_name} with secure container configuration")
-        container_kwargs.update({
-            # Security options for better isolation
-            'security_opt': get_security_options(),
-            'read_only': False,            # Allow writes to workspace only
-            'user': get_container_user_mapping()  # Run as configured non-root user
-        })
-        
-        # Retry container creation with enhanced conflict handling
-        container = None
-        max_retries = 5  # Increased retries for better reliability
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"🔄 Container creation attempt {attempt + 1}/{max_retries}")
-                container = docker_client.containers.run(**container_kwargs)
-                logger.info(f"✅ Container created successfully: {container.id[:12]} (name: {container_kwargs['name']})")
-                break
-            except docker.errors.APIError as e:
-                error_msg = str(e)
-                if "Conflict" in error_msg and "already in use" in error_msg:
-                    # Handle container name conflicts by generating a new unique name
-                    logger.warning(f"🔄 Container name conflict on attempt {attempt + 1}, generating new name...")
-                    new_name = f'ai-code-task-{task_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}'
-                    container_kwargs['name'] = new_name
-                    logger.info(f"🆔 New container name: {new_name}")
-                    # Try to clean up any conflicting containers
-                    cleanup_orphaned_containers()
-                else:
-                    logger.warning(f"⚠️  Docker API error on attempt {attempt + 1}: {e}")
-                    if attempt == max_retries - 1:
-                        raise Exception(f"Failed to create container after {max_retries} attempts: {e}")
-                time.sleep(2 ** attempt)  # Exponential backoff
-            except Exception as e:
-                logger.error(f"❌ Unexpected error creating container on attempt {attempt + 1}: {e}")
-                if attempt == max_retries - 1:
-                    raise
-                time.sleep(2 ** attempt)  # Exponential backoff
-        
-        task['container_id'] = container.id  # Legacy function
-        logger.info(f"⏳ Waiting for container to complete (timeout: 300s)...")
-        
-        # Wait for container to finish - should exit naturally when script completes
-        try:
-            logger.info(f"🔄 Waiting for container script to complete naturally...")
-            
-            # Check initial container state
-            container.reload()
-            logger.info(f"🔍 Container initial state: {container.status}")
-            
-            # Use standard wait - container should exit when bash script finishes
-            logger.info(f"🔄 Calling container.wait() - container should exit when script completes...")
-            result = container.wait(timeout=300)  # 5 minute timeout
-            logger.info(f"🎯 Container exited naturally! Exit code: {result['StatusCode']}")
-            
-            # Verify final container state
-            container.reload()
-            logger.info(f"🔍 Final container state: {container.status}")
-            
-            # Get logs before any cleanup operations
-            logger.info(f"📜 Retrieving container logs...")
-            try:
-                logs = container.logs().decode('utf-8')
-                logger.info(f"📝 Retrieved {len(logs)} characters of logs")
-                logger.info(f"🔍 First 200 chars of logs: {logs[:200]}...")
-            except Exception as log_error:
-                logger.warning(f"❌ Failed to get container logs: {log_error}")
-                logs = f"Failed to retrieve logs: {log_error}"
-            
-            # Clean up container after getting logs
-            try:
-                container.reload()  # Refresh container state
-                container.remove()
-                logger.info(f"Successfully removed container {container.id}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to remove container {container.id}: {cleanup_error}")
-                # Try force removal as fallback
-                try:
-                    container.remove(force=True)
-                    logger.info(f"Force removed container {container.id}")
-                except Exception as force_cleanup_error:
-                    logger.error(f"Failed to force remove container: {force_cleanup_error}")
-                
-        except Exception as e:
-            logger.error(f"⏰ Container timeout or error: {str(e)}")
-            logger.error(f"🔄 Updating task status to FAILED due to timeout/error...")
-            task['status'] = TaskStatus.FAILED
-            task['error'] = f"Container execution timeout or error: {str(e)}"
-            
-            # Try to get logs even on error
-            try:
-                logs = container.logs().decode('utf-8')
-            except Exception as log_error:
-                logs = f"Container failed and logs unavailable: {log_error}"
-            
-            # Try to clean up container on error
-            try:
-                container.reload()  # Refresh container state
-                container.remove(force=True)
-                logger.info(f"Cleaned up failed container {container.id}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to remove failed container {container.id}: {cleanup_error}")
-            return
-        
-        if result['StatusCode'] == 0:
-            logger.info(f"✅ Container exited successfully (code 0) - parsing results...")
-            # Parse output to extract commit hash, diff, and patch
-            lines = logs.split('\n')
-            commit_hash = None
-            git_diff = []
-            git_patch = []
-            changed_files = []
-            capturing_diff = False
-            capturing_patch = False
-            capturing_files = False
-            
-            for line in lines:
-                if line.startswith('COMMIT_HASH='):
-                    commit_hash = line.split('=', 1)[1]
-                    logger.info(f"🔑 Found commit hash: {commit_hash}")
-                elif line == '=== PATCH START ===':
-                    capturing_patch = True
-                    logger.info(f"📦 Starting to capture git patch...")
-                elif line == '=== PATCH END ===':
-                    capturing_patch = False
-                    logger.info(f"📦 Finished capturing git patch ({len(git_patch)} lines)")
-                elif line == '=== GIT DIFF START ===':
-                    capturing_diff = True
-                    logger.info(f"📊 Starting to capture git diff...")
-                elif line == '=== GIT DIFF END ===':
-                    capturing_diff = False
-                    logger.info(f"📊 Finished capturing git diff ({len(git_diff)} lines)")
-                elif line == '=== CHANGED FILES START ===':
-                    capturing_files = True
-                    logger.info(f"📁 Starting to capture changed files...")
-                elif line == '=== CHANGED FILES END ===':
-                    capturing_files = False
-                    logger.info(f"📁 Finished capturing changed files ({len(changed_files)} files)")
-                elif capturing_patch:
-                    git_patch.append(line)
-                elif capturing_diff:
-                    git_diff.append(line)
-                elif capturing_files:
-                    if line.strip():  # Only add non-empty lines
-                        changed_files.append(line.strip())
-            
-            logger.info(f"🔄 Updating task status to COMPLETED...")
-            task['status'] = TaskStatus.COMPLETED
-            task['commit_hash'] = commit_hash
-            task['git_diff'] = '\n'.join(git_diff)
-            task['git_patch'] = '\n'.join(git_patch)
-            task['changed_files'] = changed_files
-            
-            # Save tasks after completion
-            save_tasks()
-            
-            logger.info(f"🎉 {model_name} Task {task_id} completed successfully! Commit: {commit_hash[:8] if commit_hash else 'N/A'}, Diff lines: {len(git_diff)}")
-            
-        else:
-            logger.error(f"❌ Container exited with error code {result['StatusCode']}")
-            task['status'] = TaskStatus.FAILED
-            task['error'] = f"Container exited with code {result['StatusCode']}: {logs}"
-            save_tasks()  # Save failed task
-            logger.error(f"💥 {model_name} Task {task_id} failed: {task['error'][:200]}...")
-            
-    except Exception as e:
-        model_name = task.get('model', 'claude').upper()
-        logger.error(f"💥 Unexpected exception in {model_name} task {task_id}: {str(e)}")
-        task['status'] = TaskStatus.FAILED
-        task['error'] = str(e)
-        logger.error(f"🔄 {model_name} Task {task_id} failed with exception: {str(e)}")
-</file>
-
-<file path="utils/code_task_v2.py">
-import json
-import os
-import logging
-import docker
-import docker.types
-import uuid
-import time
-import random
-from datetime import datetime
-from database import DatabaseOperations
-import fcntl
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import get_container_user_mapping, get_workspace_path, get_security_options, CONTAINER_UID, CONTAINER_GID
-from utils.validators import TaskInputValidator
-from utils.secure_exec import create_safe_docker_script
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Docker client
-docker_client = docker.from_env()
-
-def cleanup_orphaned_containers():
-    """Clean up orphaned AI code task containers aggressively"""
-    try:
-        # Get all containers with our naming pattern
-        containers = docker_client.containers.list(all=True, filters={'name': 'ai-code-task-'})
-        orphaned_count = 0
-        current_time = time.time()
-        
-        for container in containers:
-            try:
-                # Get container creation time
-                created_at = container.attrs['Created']
-                # Parse ISO format timestamp and convert to epoch time
-                created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp()
-                age_hours = (current_time - created_time) / 3600
-                
-                # Remove containers that are:
-                # 1. Not running (exited, dead, created)
-                # 2. OR older than 2 hours (stuck containers)
-                # 3. OR in error state
-                should_remove = (
-                    container.status in ['exited', 'dead', 'created'] or
-                    age_hours > 2 or
-                    container.status == 'restarting'
-                )
-                
-                if should_remove:
-                    logger.info(f"🧹 Removing orphaned container {container.id[:12]} (status: {container.status}, age: {age_hours:.1f}h)")
-                    container.remove(force=True)
-                    orphaned_count += 1
-                
-            except Exception as e:
-                logger.warning(f"⚠️  Failed to cleanup container {container.id[:12]}: {e}")
-                # If we can't inspect it, try to force remove it anyway
-                try:
-                    container.remove(force=True)
-                    orphaned_count += 1
-                    logger.info(f"🧹 Force removed problematic container: {container.id[:12]}")
-                except Exception as force_error:
-                    logger.warning(f"⚠️  Could not force remove container {container.id[:12]}: {force_error}")
-        
-        if orphaned_count > 0:
-            logger.info(f"🧹 Cleaned up {orphaned_count} orphaned containers")
-        
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to cleanup orphaned containers: {e}")
-
-def run_ai_code_task_v2(task_id: int, user_id: str, github_token: str):
-    """Run AI Code automation (Claude or Codex) in a container - Supabase version"""
-    try:
-        # Get task from database to check the model type
-        task = DatabaseOperations.get_task_by_id(task_id, user_id)
-        if not task:
-            logger.error(f"Task {task_id} not found in database")
-            return
-        
-        model_cli = task.get('agent', 'claude')
-        
-        # With comprehensive sandboxing fixes, both Claude and Codex can now run in parallel
-        logger.info(f"🚀 Running {model_cli.upper()} task {task_id} directly in parallel mode")
-        return _run_ai_code_task_v2_internal(task_id, user_id, github_token)
-            
-    except Exception as e:
-        logger.error(f"💥 Exception in run_ai_code_task_v2: {str(e)}")
-        try:
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': str(e)
-            })
-        except:
-            logger.error(f"Failed to update task {task_id} status after exception")
-
-def _run_ai_code_task_v2_internal(task_id: int, user_id: str, github_token: str):
-    """Internal implementation of AI Code automation - called directly for Claude or via queue for Codex"""
-    try:
-        # Clean up any orphaned containers before starting new task
-        cleanup_orphaned_containers()
-        
-        # Get task from database (v2 function)
-        task = DatabaseOperations.get_task_by_id(task_id, user_id)
-        if not task:
-            logger.error(f"Task {task_id} not found in database")
-            return
-        
-        # Update task status to running
-        DatabaseOperations.update_task(task_id, user_id, {'status': 'running'})
-        
-        model_name = task.get('agent', 'claude').upper()
-        logger.info(f"🚀 Starting {model_name} Code task {task_id}")
-        
-        # Get prompt from chat messages
-        prompt = ""
-        if task.get('chat_messages'):
-            for msg in task['chat_messages']:
-                if msg.get('role') == 'user':
-                    prompt = msg.get('content', '')
-                    break
-        
-        if not prompt:
-            error_msg = "No user prompt found in chat messages"
-            logger.error(error_msg)
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': error_msg
-            })
-            return
-        
-        # Validate inputs using Pydantic model
-        try:
-            validated_inputs = TaskInputValidator(
-                task_id=str(task_id),
-                repo_url=task['repo_url'],
-                target_branch=task['target_branch'],
-                prompt=prompt,
-                model=task.get('agent', 'claude'),
-                github_username=task.get('github_username')
-            )
-        except Exception as validation_error:
-            error_msg = f"Input validation failed: {str(validation_error)}"
-            logger.error(error_msg)
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': error_msg
-            })
-            return
-        
-        logger.info(f"📋 Task details: prompt='{validated_inputs.prompt[:50]}...', repo={validated_inputs.repo_url}, branch={validated_inputs.target_branch}, model={model_name}")
-        logger.info(f"Starting {model_name} task {task_id}")
-        
-        # Create container environment variables
-        env_vars = {
-            'CI': 'true',  # Indicate we're in CI/non-interactive environment
-            'TERM': 'dumb',  # Use dumb terminal to avoid interactive features
-            'NO_COLOR': '1',  # Disable colors for cleaner output
-            'FORCE_COLOR': '0',  # Disable colors for cleaner output
-            'NONINTERACTIVE': '1',  # Common flag for non-interactive mode
-            'DEBIAN_FRONTEND': 'noninteractive',  # Non-interactive package installs
-        }
-        
-        # Add model-specific API keys and environment variables
-        model_cli = validated_inputs.model
-        if model_cli == 'claude':
-            env_vars.update({
-                'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
-                'ANTHROPIC_NONINTERACTIVE': '1'  # Custom flag for Anthropic tools
-            })
-        elif model_cli == 'codex':
-            env_vars.update({
-                'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-                'OPENAI_NONINTERACTIVE': '1',  # Custom flag for OpenAI tools
-                'CODEX_QUIET_MODE': '1'  # Official Codex non-interactive flag
-            })
-        
-        # Use specialized container images based on model
-        if model_cli == 'codex':
-            container_image = 'codex-automation:latest'
-        else:
-            container_image = 'claude-code-automation:latest'
-        
-        # Ensure workspace permissions for non-root container execution
-        workspace_path = get_workspace_path(task_id)
-        try:
-            os.makedirs(workspace_path, exist_ok=True)
-            # Set ownership to configured UID/GID for container user
-            os.chown(workspace_path, CONTAINER_UID, CONTAINER_GID)
-            logger.info(f"🔧 Created workspace with proper permissions: {workspace_path} (UID:{CONTAINER_UID}, GID:{CONTAINER_GID})")
-        except Exception as e:
-            logger.warning(f"⚠️  Could not set workspace permissions: {e}")
-        
-        # Add staggered start to prevent race conditions with parallel Codex tasks
-        if model_cli == 'codex':
-            # Random delay between 0.5-2 seconds for Codex containers to prevent resource conflicts
-            stagger_delay = random.uniform(0.5, 2.0)
-            logger.info(f"🕐 Adding {stagger_delay:.1f}s staggered start delay for Codex task {task_id}")
-            time.sleep(stagger_delay)
-            
-            # Add file-based locking for Codex to prevent parallel execution conflicts
-            lock_file_path = '/tmp/codex_execution_lock'
-            try:
-                logger.info(f"🔒 Acquiring Codex execution lock for task {task_id}")
-                with open(lock_file_path, 'w') as lock_file:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    logger.info(f"✅ Codex execution lock acquired for task {task_id}")
-                    # Continue with container creation while holding the lock
-            except (IOError, OSError) as e:
-                logger.warning(f"⚠️  Could not acquire Codex execution lock for task {task_id}: {e}")
-                # Add additional delay if lock fails
-                additional_delay = random.uniform(1.0, 3.0)
-                logger.info(f"🕐 Adding additional {additional_delay:.1f}s delay due to lock conflict")
-                time.sleep(additional_delay)
-        
-        # Create the command to run in container using secure method
-        container_command = create_safe_docker_script(
-            repo_url=validated_inputs.repo_url,
-            branch=validated_inputs.target_branch,
-            prompt=validated_inputs.prompt,
-            model_cli=validated_inputs.model,
-            github_username=validated_inputs.github_username
-        )
-        
-        # Run container with unified AI Code tools (supports both Claude and Codex)
-        logger.info(f"🐳 Creating Docker container for task {task_id} using {container_image} (model: {model_name})")
-        
-        # Configure Docker security options for Codex compatibility
-        container_kwargs = {
-            'image': container_image,
-            'command': ['bash', '-c', container_command],
-            'environment': env_vars,
-            'detach': True,
-            'remove': False,  # Don't auto-remove so we can get logs
-            'working_dir': '/workspace',
-            'network_mode': 'bridge',  # Ensure proper networking
-            'tty': False,  # Don't allocate TTY - may prevent clean exit
-            'stdin_open': False,  # Don't keep stdin open - may prevent clean exit
-            'name': f'ai-code-task-{task_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}',  # Highly unique container name with UUID
-            'mem_limit': '2g',  # Limit memory usage to prevent resource conflicts
-            'cpu_shares': 1024,  # Standard CPU allocation
-            'ulimits': [docker.types.Ulimit(name='nofile', soft=1024, hard=2048)],  # File descriptor limits
-            'volumes': {
-                workspace_path: {'bind': '/workspace/tmp', 'mode': 'rw'}  # Mount workspace with proper permissions
-            }
-        }
-        
-        # Add security configurations for better isolation
-        logger.info(f"🔒 Running {model_name} with secure container configuration")
-        container_kwargs.update({
-            # Security options for better isolation
-            'security_opt': get_security_options(),
-            'read_only': False,            # Allow writes to workspace only
-            'user': get_container_user_mapping()  # Run as configured non-root user
-        })
-        
-        # Retry container creation with enhanced conflict handling
-        container = None
-        max_retries = 5  # Increased retries for better reliability
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"🔄 Container creation attempt {attempt + 1}/{max_retries}")
-                container = docker_client.containers.run(**container_kwargs)
-                logger.info(f"✅ Container created successfully: {container.id[:12]} (name: {container_kwargs['name']})")
-                break
-            except docker.errors.APIError as e:
-                error_msg = str(e)
-                if "Conflict" in error_msg and "already in use" in error_msg:
-                    # Handle container name conflicts by generating a new unique name
-                    logger.warning(f"🔄 Container name conflict on attempt {attempt + 1}, generating new name...")
-                    new_name = f'ai-code-task-{task_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}'
-                    container_kwargs['name'] = new_name
-                    logger.info(f"🆔 New container name: {new_name}")
-                    # Try to clean up any conflicting containers
-                    cleanup_orphaned_containers()
-                else:
-                    logger.warning(f"⚠️  Docker API error on attempt {attempt + 1}: {e}")
-                    if attempt == max_retries - 1:
-                        raise Exception(f"Failed to create container after {max_retries} attempts: {e}")
-                time.sleep(2 ** attempt)  # Exponential backoff
-            except Exception as e:
-                logger.error(f"❌ Unexpected error creating container on attempt {attempt + 1}: {e}")
-                if attempt == max_retries - 1:
-                    raise
-                time.sleep(2 ** attempt)  # Exponential backoff
-        
-        # Update task with container ID (v2 function)
-        DatabaseOperations.update_task(task_id, user_id, {'container_id': container.id})
-        
-        logger.info(f"⏳ Waiting for container to complete (timeout: 300s)...")
-        
-        # Wait for container to finish - should exit naturally when script completes
-        try:
-            logger.info(f"🔄 Waiting for container script to complete naturally...")
-            
-            # Check initial container state
-            container.reload()
-            logger.info(f"🔍 Container initial state: {container.status}")
-            
-            # Use standard wait - container should exit when bash script finishes
-            logger.info(f"🔄 Calling container.wait() - container should exit when script completes...")
-            result = container.wait(timeout=300)  # 5 minute timeout
-            logger.info(f"🎯 Container exited naturally! Exit code: {result['StatusCode']}")
-            
-            # Verify final container state
-            container.reload()
-            logger.info(f"🔍 Final container state: {container.status}")
-            
-            # Get logs before any cleanup operations
-            logger.info(f"📜 Retrieving container logs...")
-            try:
-                logs = container.logs().decode('utf-8')
-                logger.info(f"📝 Retrieved {len(logs)} characters of logs")
-                logger.info(f"🔍 First 200 chars of logs: {logs[:200]}...")
-            except Exception as log_error:
-                logger.warning(f"❌ Failed to get container logs: {log_error}")
-                logs = f"Failed to retrieve logs: {log_error}"
-            
-            # Clean up container after getting logs
-            try:
-                container.reload()  # Refresh container state
-                container.remove()
-                logger.info(f"🧹 Successfully removed container {container.id[:12]}")
-            except docker.errors.NotFound:
-                logger.info(f"🧹 Container {container.id[:12]} already removed")
-            except Exception as cleanup_error:
-                logger.warning(f"⚠️  Failed to remove container {container.id[:12]}: {cleanup_error}")
-                # Try force removal as fallback
-                try:
-                    container.remove(force=True)
-                    logger.info(f"🧹 Force removed container {container.id[:12]}")
-                except docker.errors.NotFound:
-                    logger.info(f"🧹 Container {container.id[:12]} already removed")
-                except Exception as force_cleanup_error:
-                    logger.error(f"❌ Failed to force remove container {container.id[:12]}: {force_cleanup_error}")
-                
-        except Exception as e:
-            logger.error(f"⏰ Container timeout or error: {str(e)}")
-            logger.error(f"🔄 Updating task status to FAILED due to timeout/error...")
-            
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': f"Container execution timeout or error: {str(e)}"
-            })
-            
-            # Try to get logs even on error
-            try:
-                logs = container.logs().decode('utf-8')
-            except Exception as log_error:
-                logs = f"Container failed and logs unavailable: {log_error}"
-            
-            # Try to clean up container on error
-            try:
-                container.reload()  # Refresh container state
-                container.remove(force=True)
-                logger.info(f"Cleaned up failed container {container.id}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to remove failed container {container.id}: {cleanup_error}")
-            return
-        
-        if result['StatusCode'] == 0:
-            logger.info(f"✅ Container exited successfully (code 0) - parsing results...")
-            # Parse output to extract commit hash, diff, and patch
-            lines = logs.split('\n')
-            commit_hash = None
-            git_diff = []
-            git_patch = []
-            changed_files = []
-            file_changes = []
-            capturing_diff = False
-            capturing_patch = False
-            capturing_files = False
-            capturing_file_changes = False
-            capturing_before = False
-            capturing_after = False
-            current_file = None
-            current_before = []
-            current_after = []
-            
-            for line in lines:
-                if line.startswith('COMMIT_HASH='):
-                    commit_hash = line.split('=', 1)[1]
-                    logger.info(f"🔑 Found commit hash: {commit_hash}")
-                elif line == '=== PATCH START ===':
-                    capturing_patch = True
-                    logger.info(f"📦 Starting to capture git patch...")
-                elif line == '=== PATCH END ===':
-                    capturing_patch = False
-                    logger.info(f"📦 Finished capturing git patch ({len(git_patch)} lines)")
-                elif line == '=== GIT DIFF START ===':
-                    capturing_diff = True
-                    logger.info(f"📊 Starting to capture git diff...")
-                elif line == '=== GIT DIFF END ===':
-                    capturing_diff = False
-                    logger.info(f"📊 Finished capturing git diff ({len(git_diff)} lines)")
-                elif line == '=== CHANGED FILES START ===':
-                    capturing_files = True
-                    logger.info(f"📁 Starting to capture changed files...")
-                elif line == '=== CHANGED FILES END ===':
-                    capturing_files = False
-                    logger.info(f"📁 Finished capturing changed files ({len(changed_files)} files)")
-                elif line == '=== FILE CHANGES START ===':
-                    capturing_file_changes = True
-                    logger.info(f"🔄 Starting to capture file changes...")
-                elif line == '=== FILE CHANGES END ===':
-                    capturing_file_changes = False
-                    # Add the last file if we were processing one
-                    if current_file:
-                        file_changes.append({
-                            'filename': current_file,
-                            'before': '\n'.join(current_before),
-                            'after': '\n'.join(current_after)
-                        })
-                    logger.info(f"🔄 Finished capturing file changes ({len(file_changes)} files)")
-                elif capturing_file_changes:
-                    if line.startswith('FILE: '):
-                        # Save previous file data if exists
-                        if current_file:
-                            file_changes.append({
-                                'filename': current_file,
-                                'before': '\n'.join(current_before),
-                                'after': '\n'.join(current_after)
-                            })
-                        # Start new file
-                        current_file = line.split('FILE: ', 1)[1]
-                        current_before = []
-                        current_after = []
-                        capturing_before = False
-                        capturing_after = False
-                    elif line == '=== BEFORE START ===':
-                        capturing_before = True
-                        capturing_after = False
-                    elif line == '=== BEFORE END ===':
-                        capturing_before = False
-                    elif line == '=== AFTER START ===':
-                        capturing_after = True
-                        capturing_before = False
-                    elif line == '=== AFTER END ===':
-                        capturing_after = False
-                    elif line == '=== FILE END ===':
-                        # File processing complete
-                        pass
-                    elif capturing_before:
-                        current_before.append(line)
-                    elif capturing_after:
-                        current_after.append(line)
-                elif capturing_patch:
-                    git_patch.append(line)
-                elif capturing_diff:
-                    git_diff.append(line)
-                elif capturing_files:
-                    if line.strip():  # Only add non-empty lines
-                        changed_files.append(line.strip())
-            
-            logger.info(f"🔄 Updating task status to COMPLETED...")
-            
-            # Update task in database
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'completed',
-                'commit_hash': commit_hash,
-                'git_diff': '\n'.join(git_diff),
-                'git_patch': '\n'.join(git_patch),
-                'changed_files': changed_files,
-                'execution_metadata': {
-                    'file_changes': file_changes,
-                    'completed_at': datetime.now().isoformat()
-                }
-            })
-            
-            logger.info(f"🎉 {model_name} Task {task_id} completed successfully! Commit: {commit_hash[:8] if commit_hash else 'N/A'}, Diff lines: {len(git_diff)}")
-            
-        else:
-            logger.error(f"❌ Container exited with error code {result['StatusCode']}")
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': f"Container exited with code {result['StatusCode']}: {logs}"
-            })
-            logger.error(f"💥 {model_name} Task {task_id} failed: {logs[:200]}...")
-            
-    except Exception as e:
-        model_name = task.get('agent', 'claude').upper() if task else 'UNKNOWN'
-        logger.error(f"💥 Unexpected exception in {model_name} task {task_id}: {str(e)}")
-        
-        try:
-            DatabaseOperations.update_task(task_id, user_id, {
-                'status': 'failed',
-                'error': str(e)
-            })
-        except:
-            logger.error(f"Failed to update task {task_id} status after exception")
-        
-        logger.error(f"🔄 {model_name} Task {task_id} failed with exception: {str(e)}")
-</file>
-
-<file path="utils/container.py">
-import logging
-import docker
-import docker.types
-import time
-from datetime import datetime
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-# Docker client
-docker_client = docker.from_env()
-
-def cleanup_orphaned_containers():
-    """Clean up orphaned AI code task containers aggressively"""
-    try:
-        # Get all containers with our naming pattern
-        containers = docker_client.containers.list(all=True, filters={'name': 'ai-code-task-'})
-        orphaned_count = 0
-        current_time = time.time()
-        
-        for container in containers:
-            try:
-                # Get container creation time
-                created_at = container.attrs['Created']
-                # Parse ISO format timestamp and convert to epoch time
-                created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp()
-                age_hours = (current_time - created_time) / 3600
-                
-                # Remove containers that are:
-                # 1. Not running (exited, dead, created)
-                # 2. OR older than 2 hours (stuck containers)
-                # 3. OR in error state
-                should_remove = (
-                    container.status in ['exited', 'dead', 'created'] or
-                    age_hours > 2 or
-                    container.status == 'restarting'
-                )
-                
-                if should_remove:
-                    logger.info(f"🧹 Removing orphaned container {container.id[:12]} (status: {container.status}, age: {age_hours:.1f}h)")
-                    container.remove(force=True)
-                    orphaned_count += 1
-                
-            except Exception as e:
-                logger.warning(f"⚠️  Failed to cleanup container {container.id[:12]}: {e}")
-                # If we can't inspect it, try to force remove it anyway
-                try:
-                    container.remove(force=True)
-                    orphaned_count += 1
-                    logger.info(f"🧹 Force removed problematic container: {container.id[:12]}")
-                except Exception as force_error:
-                    logger.warning(f"⚠️  Could not force remove container {container.id[:12]}: {force_error}")
-        
-        if orphaned_count > 0:
-            logger.info(f"🧹 Cleaned up {orphaned_count} orphaned containers")
-        
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to cleanup orphaned containers: {e}")
-</file>
-
-<file path="utils/secure_exec.py">
-"""Secure command execution utilities."""
-
-import shlex
-import subprocess
-from typing import List, Tuple, Optional
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-def safe_git_clone(repo_url: str, branch: str, target_dir: str) -> Tuple[int, str, str]:
-    """
-    Safely clone a git repository using subprocess with shell=False.
-    
-    Args:
-        repo_url: The validated repository URL
-        branch: The validated branch name
-        target_dir: The target directory path
-        
-    Returns:
-        Tuple of (return_code, stdout, stderr)
-    """
-    # Build command as a list for shell=False
-    cmd = [
-        'git', 'clone',
-        '-b', branch,
-        repo_url,
-        target_dir
-    ]
-    
-    logger.info(f"Executing git clone: {' '.join(cmd)}")
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minute timeout
-            check=False
-        )
-        return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        logger.error("Git clone timed out after 5 minutes")
-        return 1, "", "Git clone operation timed out"
-    except Exception as e:
-        logger.error(f"Error executing git clone: {e}")
-        return 1, "", str(e)
-
-
-def safe_git_config(config_key: str, config_value: str, repo_dir: str) -> Tuple[int, str, str]:
-    """
-    Safely set git configuration using subprocess with shell=False.
-    
-    Args:
-        config_key: The git config key (e.g., 'user.email')
-        config_value: The config value
-        repo_dir: The repository directory
-        
-    Returns:
-        Tuple of (return_code, stdout, stderr)
-    """
-    # Build command as a list
-    cmd = ['git', 'config', config_key, config_value]
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False
-        )
-        return result.returncode, result.stdout, result.stderr
-    except Exception as e:
-        logger.error(f"Error setting git config: {e}")
-        return 1, "", str(e)
-
-
-def safe_git_commit(message: str, repo_dir: str) -> Tuple[int, str, str]:
-    """
-    Safely create a git commit using subprocess with shell=False.
-    
-    Args:
-        message: The commit message (will be properly escaped)
-        repo_dir: The repository directory
-        
-    Returns:
-        Tuple of (return_code, stdout, stderr)
-    """
-    # Build command as a list - no need to escape when using shell=False
-    cmd = ['git', 'commit', '-m', message]
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False
-        )
-        return result.returncode, result.stdout, result.stderr
-    except Exception as e:
-        logger.error(f"Error creating git commit: {e}")
-        return 1, "", str(e)
-
-
-def safe_git_command(git_args: List[str], repo_dir: str, timeout: int = 60) -> Tuple[int, str, str]:
-    """
-    Safely execute any git command using subprocess with shell=False.
-    
-    Args:
-        git_args: List of git command arguments (e.g., ['diff', 'HEAD~1', 'HEAD'])
-        repo_dir: The repository directory
-        timeout: Command timeout in seconds
-        
-    Returns:
-        Tuple of (return_code, stdout, stderr)
-    """
-    # Build command starting with 'git'
-    cmd = ['git'] + git_args
-    
-    logger.info(f"Executing git command: {' '.join(cmd)}")
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False
-        )
-        return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        logger.error(f"Git command timed out after {timeout} seconds")
-        return 1, "", f"Git command timed out after {timeout} seconds"
-    except Exception as e:
-        logger.error(f"Error executing git command: {e}")
-        return 1, "", str(e)
-
-
-def create_safe_docker_script(
-    repo_url: str,
-    branch: str,
-    prompt: str,
-    model_cli: str,
-    github_username: Optional[str] = None
-) -> str:
-    """
-    Create a safe Docker container script with properly escaped values.
-    
-    Args:
-        repo_url: Validated repository URL
-        branch: Validated branch name
-        prompt: User prompt (will be escaped)
-        model_cli: Validated model CLI name ('claude' or 'codex')
-        github_username: Optional GitHub username
-        
-    Returns:
-        Safe shell script for Docker container execution
-    """
-    # Use shlex.quote for proper shell escaping
-    safe_repo_url = shlex.quote(repo_url)
-    safe_branch = shlex.quote(branch)
-    safe_prompt = shlex.quote(prompt)
-    safe_model = shlex.quote(model_cli)
-    
-    # Build script with properly escaped values
-    script = f'''#!/bin/bash
-set -e
-echo "Setting up repository..."
-
-# Clone repository with validated and escaped parameters
-git clone -b {safe_branch} {safe_repo_url} /workspace/repo
-cd /workspace/repo
-
-# Configure git
-git config user.email "claude-code@automation.com"
-git config user.name "Claude Code Automation"
-
-echo "📋 Will extract changes as patch for later PR creation..."
-echo "Starting {safe_model.upper()} Code with prompt..."
-
-# Create a temporary file with the prompt
-echo {safe_prompt} > /tmp/prompt.txt
-
-# Check which CLI tool to use based on model selection
-if [ {safe_model} = "codex" ]; then
-    echo "Using Codex (OpenAI Codex) CLI..."
-    
-    # Set environment variables for non-interactive mode
-    export CODEX_QUIET_MODE=1
-    
-    # Run Codex with the prompt
-    if command -v codex >/dev/null 2>&1; then
-        codex < /tmp/prompt.txt
-        CODEX_EXIT_CODE=$?
-        echo "Codex finished with exit code: $CODEX_EXIT_CODE"
-        
-        if [ $CODEX_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Codex failed with exit code $CODEX_EXIT_CODE"
-            exit $CODEX_EXIT_CODE
-        fi
-        
-        echo "✅ Codex completed successfully"
-    else
-        echo "ERROR: codex command not found"
-        exit 1
-    fi
-else
-    echo "Using Claude CLI..."
-    
-    # Run Claude with the prompt
-    if [ -f /usr/local/bin/claude ]; then
-        # Use the official --print flag for non-interactive mode
-        cat /tmp/prompt.txt | node /usr/local/bin/claude --print --allowedTools "Edit,Bash"
-        CLAUDE_EXIT_CODE=$?
-        echo "Claude Code finished with exit code: $CLAUDE_EXIT_CODE"
-        
-        if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Claude Code failed with exit code $CLAUDE_EXIT_CODE"
-            exit $CLAUDE_EXIT_CODE
-        fi
-        
-        echo "✅ Claude Code completed successfully"
-    else
-        echo "ERROR: claude command not found"
-        exit 1
-    fi
-fi
-
-# Extract changes for PR creation
-echo "🔍 Checking for changes..."
-if git diff --quiet && git diff --cached --quiet; then
-    echo "❌ No changes detected after running {safe_model}"
-    exit 1
-fi
-
-# Stage all changes
-echo "📝 Staging all changes..."
-git add -A
-
-# Create commit with safe message
-echo "💾 Creating commit..."'''
-    
-    # Add commit message handling
-    if github_username:
-        safe_username = shlex.quote(github_username)
-        commit_msg = f"{model_cli.capitalize()}: {prompt[:100]}"
-        safe_commit_msg = shlex.quote(commit_msg)
-        script += f'''
-git commit -m {safe_commit_msg}
-'''
-    else:
-        commit_msg = f"{model_cli.capitalize()}: Automated changes"
-        safe_commit_msg = shlex.quote(commit_msg)
-        script += f'''
-git commit -m {safe_commit_msg}
-'''
-    
-    script += '''
-# Generate patch and diff information
-echo "📦 Generating patch file..."
-git format-patch HEAD~1 --stdout > /tmp/changes.patch
-echo "=== PATCH START ==="
-cat /tmp/changes.patch
-echo "=== PATCH END ==="
-
-# Also get the diff for display
-echo "=== GIT DIFF START ==="
-git diff HEAD~1 HEAD
-echo "=== GIT DIFF END ==="
-
-# List changed files for reference
-echo "=== CHANGED FILES START ==="
-git diff --name-only HEAD~1 HEAD
-echo "=== CHANGED FILES END ==="
-
-# Get before/after content for merge view
-echo "=== FILE CHANGES START ==="
-for file in $(git diff --name-only HEAD~1 HEAD); do
-    echo "FILE: $file"
-    echo "=== BEFORE START ==="
-    git show HEAD~1:"$file" 2>/dev/null || echo "FILE_NOT_EXISTS"
-    echo "=== BEFORE END ==="
-    echo "=== AFTER START ==="
-    cat "$file" 2>/dev/null || echo "FILE_DELETED"
-    echo "=== AFTER END ==="
-    echo "=== FILE END ==="
-done
-echo "=== FILE CHANGES END ==="
-
-# Exit successfully
-echo "Container work completed successfully"
-exit 0
-'''
-    
-    return script
 </file>
 
 <file path="utils/validators.py">
@@ -2386,6 +1541,7 @@ OPENAI_API_KEY=your-openai-api-key
 
 # E2B Configuration
 E2B_API_KEY=your-e2b-api-key
+E2B_TEMPLATE_ID=async-code-agents-xxxxx  # Optional: Custom template ID for faster execution
 
 # Flask Configuration
 FLASK_ENV=production
@@ -2568,25 +1724,16 @@ def refresh_access_token(refresh_token: str) -> dict:
 </file>
 
 <file path="config.py">
-"""Configuration module for container security settings."""
+"""Configuration module - minimal backward compatibility wrapper."""
 # Import from centralized configuration
 from env_config import Config
 
-# Re-export container configuration for backward compatibility
-CONTAINER_UID = Config.CONTAINER_UID
-CONTAINER_GID = Config.CONTAINER_GID
-CONTAINER_USER = Config.CONTAINER_USER
-CONTAINER_SECURITY_OPTS = Config.CONTAINER_SECURITY_OPTS
-CONTAINER_READ_ONLY = Config.CONTAINER_READ_ONLY
-CONTAINER_MEM_LIMIT = Config.CONTAINER_MEM_LIMIT
-CONTAINER_CPU_SHARES = Config.CONTAINER_CPU_SHARES
-WORKSPACE_BASE_PATH = Config.WORKSPACE_BASE_PATH
-WORKSPACE_PREFIX = Config.WORKSPACE_PREFIX
-
-# Re-export functions for backward compatibility
-get_container_user_mapping = Config.get_container_user_mapping
-get_workspace_path = Config.get_workspace_path
-get_security_options = Config.get_security_options
+# Re-export only E2B and API configurations for backward compatibility
+# Docker-related configurations have been removed as they are no longer used
+E2B_API_KEY = Config.E2B_API_KEY
+E2B_TEMPLATE_ID = Config.E2B_TEMPLATE_ID
+ANTHROPIC_API_KEY = Config.ANTHROPIC_API_KEY
+OPENAI_API_KEY = Config.OPENAI_API_KEY
 </file>
 
 <file path="database.py">
@@ -3255,20 +2402,9 @@ class Config:
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
     
-    # Container Configuration
-    CONTAINER_UID = int(os.getenv('CONTAINER_UID', '1000'))
-    CONTAINER_GID = int(os.getenv('CONTAINER_GID', '1000'))
-    CONTAINER_USER = f"{CONTAINER_UID}:{CONTAINER_GID}"
-    CONTAINER_MEM_LIMIT = os.getenv('CONTAINER_MEM_LIMIT', '2g')
-    CONTAINER_CPU_SHARES = int(os.getenv('CONTAINER_CPU_SHARES', '1024'))
-    
-    # Security Configuration
-    CONTAINER_SECURITY_OPTS = ['no-new-privileges=true']
-    CONTAINER_READ_ONLY = os.getenv('CONTAINER_READ_ONLY', 'false').lower() == 'true'
-    
-    # Workspace Configuration
-    WORKSPACE_BASE_PATH = os.getenv('WORKSPACE_BASE_PATH', '/tmp')
-    WORKSPACE_PREFIX = 'ai-workspace-'
+    # E2B Configuration
+    E2B_API_KEY = os.getenv('E2B_API_KEY')
+    E2B_TEMPLATE_ID = os.getenv('E2B_TEMPLATE_ID')
     
     # Application Configuration
     FLASK_ENV = os.getenv('FLASK_ENV', 'production')
@@ -3292,20 +2428,6 @@ class Config:
         if missing_vars:
             raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
     
-    @classmethod
-    def get_container_user_mapping(cls):
-        """Get the user mapping for containers."""
-        return cls.CONTAINER_USER
-    
-    @classmethod
-    def get_workspace_path(cls, task_id):
-        """Get the workspace path for a specific task."""
-        return os.path.join(cls.WORKSPACE_BASE_PATH, f"{cls.WORKSPACE_PREFIX}{task_id}")
-    
-    @classmethod
-    def get_security_options(cls):
-        """Get the security options for containers."""
-        return cls.CONTAINER_SECURITY_OPTS.copy()
 
 
 # Only validate required environment variables if not in test mode
@@ -3929,10 +3051,10 @@ def start_task():
         if not task:
             return jsonify({'error': 'Failed to create task'}), 500
         
-        # Start task in background thread with all required parameters
+        # Start task in background thread with minimal required parameters
         thread = threading.Thread(
             target=run_ai_code_task_e2b, 
-            args=(task['id'], user_id, github_token, repo_url, branch, prompt, model, project_id)
+            args=(task['id'], user_id, github_token)
         )
         thread.daemon = True
         thread.start()
@@ -4571,6 +3693,113 @@ def apply_diff_to_content(original_content, diff_lines, filename):
     except Exception as e:
         logger.error(f"❌ Error applying diff to {filename}: {str(e)}")
         return None
+</file>
+
+<file path="temp_conversation_with_sr_arch.txt">
+Okay, let's compare the E2B implementation I outlined conceptually in the previous response (let's call it "Conceptual E2B Refactor") with the actual E2B implementation you've provided in the new file listing (primarily in utils/code_task_e2b.py and utils/code_task_e2b_real.py).
+Your Provided E2B Implementation (Key Features):
+Dispatcher Logic: utils/code_task_e2b.py correctly checks for E2B_API_KEY and dispatches to _real_run_ai_code_task_e2b from utils/code_task_e2b_real.py if present, otherwise runs a local simulation using subprocess.
+Async Runner: utils/async_runner.py is implemented to bridge Flask's sync nature with E2B's async SDK.
+Real E2B Execution (code_task_e2b_real.py):
+Uses e2b.Sandbox.create() to instantiate sandboxes.
+Passes GITHUB_TOKEN and AI API keys as environment variables to the sandbox.
+Performs git clone and git config using sandbox.process.start_and_wait().
+Agent Execution:
+Claude: Installs @anthropic-ai/claude-cli globally via npm and then runs claude "{prompt}".
+Codex: Installs openai via pip, writes a Python script to /tmp/codex_agent.py, and then executes that script.
+Captures git status, git diff, git rev-parse HEAD, and git format-patch using sandbox.process.start_and_wait().
+Updates the database with results.
+Includes timeout handling for various stages (sandbox lifetime, clone, agent, commands).
+Includes error handling for E2B quota, API key issues, GitHub auth, and general exceptions.
+Ensures sandbox is closed in a finally block.
+Simulation Mode (code_task_e2b.py -> simulate_ai_execution):
+Creates a temporary local directory.
+Uses local subprocess to run git commands.
+Simulates AI execution by creating/modifying AI_GENERATED.md.
+Extracts git diff, patch, commit hash.
+Task Parameter Fetching: Both the dispatcher and the real E2B function fetch full task details from the database if not all primary parameters (repo_url, branch, prompt, model) are passed in.
+Error Sanitization: Redacts github_token from error messages.
+Diff Parsing: parse_file_changes is present in both code_task_e2b_real.py and code_task_e2b.py.
+Comparison: Your Implementation vs. Conceptual E2B Refactor
+Let's see what the conceptual refactor suggested and how your implementation aligns or differs:
+Core E2B SDK Usage:
+Conceptual: Suggested using Sandbox() and sandbox.run_code() or sandbox.commands.run().
+Yours: Uses await Sandbox.create() and sandbox.process.start_and_wait() for shell commands, and for Codex, writes a Python script then runs it with sandbox.process.start_and_wait("python ...").
+Analysis: Your approach using sandbox.process.start_and_wait() is perfectly valid and often simpler for direct command execution. The conceptual sandbox.run_code() is more for when you want to run Python code directly and get structured results from Python objects (like charts from matplotlib). Since your core logic involves running git and existing CLIs, process.start_and_wait is appropriate.
+Missing/Different from Conceptual (Minor): The conceptual one proposed an E2B_SCRIPT_TEMPLATE (a single large Python script run by sandbox.run_python()). Your code_task_e2b_real.py orchestrates a sequence of shell commands using sandbox.process.start_and_wait() and a small Python script for Codex. Both are valid strategies. Orchestrating with multiple start_and_wait calls gives fine-grained control and error checking at each step. A single large script might be simpler to write but harder to debug step-by-step if something goes wrong inside. Your approach is more robust for sequential shell commands.
+Agent CLI Handling:
+Conceptual: Highlighted the need to make CLIs available in E2B, suggesting custom templates or on-the-fly installation.
+Yours: Implements on-the-fly installation for both Claude CLI (npm) and OpenAI SDK (pip).
+Analysis: This works but, as predicted, is inefficient for repeated task executions. Custom E2B templates are the recommended optimization here.
+Match: Your implementation directly addresses how to run these agents.
+Script Generation for E2B:
+Conceptual: Suggested replacing create_safe_docker_script with a new Python script for E2B.
+Yours:
+For general git operations and Claude CLI, you're essentially sending individual commands, not one big script.
+For Codex, you dynamically generate a small Python script (script = f'''...''') and write it to /tmp/codex_agent.py inside the sandbox.
+Analysis: Your approach for Codex matches the spirit of the conceptual idea of running a Python script. For Claude and git, individual commands are fine. The old create_safe_docker_script is indeed no longer relevant in the E2B context.
+Output Parsing:
+Conceptual: Noted that E2B returns structured results, but for git diff etc., you'd still capture stdout.
+Yours: Correctly captures stdout from git diff, git format-patch, etc. The parse_file_changes function is used for generating the detailed file changes for the UI.
+Analysis: This aligns well. The old Docker log parsing is gone, replaced by direct stdout capture.
+Async Handling:
+Conceptual: Didn't explicitly provide AsyncRunner but acknowledged the need.
+Yours: utils/async_runner.py is implemented, which is excellent. run_async_task is used in code_task_e2b_real.py's synchronous wrapper run_ai_code_task_e2b.
+Analysis: This is a very good and necessary addition for integrating the async E2B SDK with sync Flask.
+Configuration and Environment:
+Conceptual: Suggested adding E2B_API_KEY and removing Docker configs.
+Yours: .env.example correctly includes E2B_API_KEY. Your env_config.py still contains Docker-related configs (CONTAINER_UID, etc.). These are now dead code and should be removed to avoid confusion. The config.py also re-exports them.
+Missing/Needs Action: Clean up unused Docker-related configurations from env_config.py and config.py.
+Error Handling and Timeouts:
+Conceptual: General mention.
+Yours: code_task_e2b_real.py has good specific timeout constants and error handling for E2B sandbox creation and process execution, including asyncio.TimeoutError. This is robust.
+Analysis: Your implementation is more detailed and practical here.
+What Might Be Missing or Needs Further Consideration from Your Implementation (Compared to General Best Practices or Potential Issues):
+Custom E2B Templates (Efficiency):
+Crucial Point from Previous Review: Your current method of npm install -g @anthropic-ai/claude-cli and pip install openai inside each sandbox for every task is highly inefficient.
+Action: Define an e2b.Dockerfile for a custom sandbox template that pre-installs git, nodejs, npm, @anthropic-ai/claude-cli, and python3-pip (then pip install openai). Build this template using e2b template build and then use await Sandbox.create(template='your-custom-template-id', ...) in code_task_e2b_real.py. This will dramatically improve task startup time and reduce costs.
+Your top-level Dockerfile installs @anthropic-ai/sdk globally. This is for the Flask app itself, NOT the E2B sandbox environment where the agent code runs. The sandbox is a separate, fresh environment each time unless you use a custom template.
+Claude CLI Prompt Injection Risk:
+In _run_claude_agent: f'cd /workspace/repo && claude "{prompt}"'
+If prompt contains double quotes or other shell metacharacters (e.g., "; rm -rf /), it could break the command or lead to injection within the E2B sandbox's shell. While E2B isolates the sandbox, an injection inside it can still disrupt your task.
+Action: The safest way is to write the prompt to a file within the sandbox and have the claude CLI read from that file (e.g., claude -f /tmp/prompt.txt).
+# In _run_claude_agent
+prompt_file_path = "/tmp/agent_prompt.txt"
+await sandbox.filesystem.write(prompt_file_path, prompt)
+claude_result = await asyncio.wait_for(
+    sandbox.process.start_and_wait(
+        f'cd /workspace/repo && claude --prompt-file {prompt_file_path}' # Assuming claude-cli supports this
+    ),
+    timeout=self.AGENT_TIMEOUT
+)
+# or if it only takes stdin:
+# claude_process = await sandbox.process.start(
+#    f'cd /workspace/repo && claude --read-stdin' # Fictional flag
+# )
+# await claude_process.send_stdin(prompt)
+# claude_result = await claude_process.wait()
+Use code with caution.
+Python
+If claude-cli doesn't support reading from a file or stdin directly for the main prompt, you might need to escape the prompt string very carefully before embedding it in the command. shlex.quote() could be run inside the sandbox using a small Python helper if needed, or you can implement robust escaping before forming the command string.
+Codex Agent Script Complexity:
+The Python script generated for the Codex agent is simple. If it needs to become more complex (e.g., interact with files based on the prompt, make multiple LLM calls), managing it as an inline f-string will become cumbersome.
+Consideration: For more complex agent logic, have a predefined Python script file in your project, upload it to the sandbox using sandbox.filesystem.write(), and then execute it. The prompt can be passed as an environment variable or written to a temporary file that the script reads.
+Sequential Codex Queue (utils/__init__.py):
+You've kept the codex_execution_queue. Is this still necessary? E2B sandboxes are isolated. If this queue was to prevent local Docker resource exhaustion, it's likely not needed with E2B. If it's to rate-limit calls to the OpenAI API from within the sandboxes (if many tasks run concurrently), then it might still serve a purpose, but it's a global lock on your Flask app for any Codex task.
+Action: Evaluate if this queue is still strictly required. If so, document why (e.g., "Codex API rate limits").
+Unused Docker Configurations:
+Files like utils/container.py, utils/secure_exec.py (most of it), and Docker-related settings in env_config.py/config.py are now obsolete.
+Action: Remove them to clean up the codebase. utils/code_task_v1.py and utils/code_task_v2.py (the old Docker-based ones) can also be removed.
+parse_file_changes Duplication:
+This function exists in both utils/code_task_e2b.py and utils/code_task_e2b_real.py.
+Action: Consolidate into a common utility location (e.g., a new utils/git_utils.py or keep it in one of the code_task_e2b*.py files and import).
+Task Argument Passing to run_ai_code_task_e2b:
+As noted before, tasks.py passes many arguments explicitly. run_ai_code_task_e2b in utils/code_task_e2b.py has logic to fetch them if not provided. This fallback logic seems mostly unused if tasks.py is the only caller.
+Action: Simplify by either removing the fallback DB fetch in utils/code_task_e2b.py or changing tasks.py to only pass task_id, user_id, github_token. The latter is cleaner.
+Conclusion of Comparison:
+Your actual implementation is quite good and covers many necessary aspects of a real-world E2B integration, including robust error handling and the async bridge. It's more detailed and practical than the initial conceptual refactor in areas like specific command execution and timeout management.
+The primary "missing" piece from the conceptual advice that would significantly benefit your current code is the use of custom E2B templates to avoid repeated dependency installations. The prompt injection concern for the Claude CLI is also a notable point to address for robustness. The cleanup of now-obsolete Docker-related code will also improve maintainability.
+Overall, you're on the right track. The current structure is functional and the transition to E2B is well-managed by the dispatcher. The suggested actions are mostly optimizations and robustness improvements rather than fundamental flaws.
 </file>
 
 <file path="test_api_simple.sh">

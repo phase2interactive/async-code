@@ -283,51 +283,109 @@ class E2BCodeExecutor:
     
     async def _run_claude_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Claude agent in the sandbox"""
-        try:
-            # Check if Claude CLI is already installed (in custom template)
-            check_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait("which claude"),
-                timeout=5
-            )
-            
-            # Only install if not found
-            if check_result.exit_code != 0:
-                logger.info("📦 Installing Claude CLI...")
-                install_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
-                        "npm install -g @anthropic-ai/claude-cli"
-                    ),
-                    timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
-                )
-            else:
-                logger.info("✅ Claude CLI already installed")
-            
-            # Write prompt to file to avoid shell injection
-            prompt_file = "/tmp/claude_prompt.txt"
-            await sandbox.filesystem.write(prompt_file, prompt)
-            
-            # Run Claude with the prompt from file
-            # Note: Claude CLI doesn't have --prompt-file, so we use stdin redirect
-            claude_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
-                    f'cd /workspace/repo && claude < {prompt_file}'
-                ),
-                timeout=self.AGENT_TIMEOUT
-            )
-            
-            if claude_result.exit_code != 0:
-                raise Exception(f"Claude agent failed: {claude_result.stderr or 'Unknown error'}")
-                
-        except asyncio.TimeoutError:
-            raise Exception(f"Claude agent timed out after {self.AGENT_TIMEOUT} seconds")
+        # Read the sophisticated agent script
+        agent_script_path = os.path.join(
+            os.path.dirname(__file__), 
+            'agent_scripts', 
+            'claude_agent.py'
+        )
         
-        return {
-            'output': claude_result.stdout,
-            'messages': [
-                {'role': 'user', 'content': prompt},
-                {'role': 'assistant', 'content': claude_result.stdout}
-            ]
-        }
+        # Use the sophisticated script if it exists, otherwise fall back to CLI
+        if os.path.exists(agent_script_path):
+            with open(agent_script_path, 'r') as f:
+                script = f.read()
+            
+            # Write the script and prompt to sandbox
+            await sandbox.filesystem.write("/tmp/claude_agent.py", script)
+            await sandbox.filesystem.write("/tmp/agent_prompt.txt", prompt)
+            
+            try:
+                # Check if anthropic is already installed (in custom template)
+                check_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait("python3 -c 'import anthropic'"),
+                    timeout=5
+                )
+                
+                # Only install if not found
+                if check_result.exit_code != 0:
+                    logger.info("📦 Installing Anthropic SDK...")
+                    await asyncio.wait_for(
+                        sandbox.process.start_and_wait(
+                            "pip install anthropic"
+                        ),
+                        timeout=self.CLONE_TIMEOUT
+                    )
+                else:
+                    logger.info("✅ Anthropic SDK already installed")
+                
+                # Run the Claude agent
+                claude_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        "cd /workspace/repo && python3 /tmp/claude_agent.py"
+                    ),
+                    timeout=self.AGENT_TIMEOUT
+                )
+                
+                if claude_result.exit_code != 0:
+                    raise Exception(f"Claude agent failed: {claude_result.stderr or 'Unknown error'}")
+                    
+            except asyncio.TimeoutError:
+                raise Exception(f"Claude agent timed out after {self.AGENT_TIMEOUT} seconds")
+            
+            return {
+                'output': claude_result.stdout,
+                'messages': [
+                    {'role': 'user', 'content': prompt},
+                    {'role': 'assistant', 'content': claude_result.stdout}
+                ]
+            }
+        
+        else:
+            # Fallback to CLI version
+            try:
+                # Check if Claude CLI is already installed (in custom template)
+                check_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait("which claude"),
+                    timeout=5
+                )
+                
+                # Only install if not found
+                if check_result.exit_code != 0:
+                    logger.info("📦 Installing Claude CLI...")
+                    install_result = await asyncio.wait_for(
+                        sandbox.process.start_and_wait(
+                            "npm install -g @anthropic-ai/claude-cli"
+                        ),
+                        timeout=self.CLONE_TIMEOUT
+                    )
+                else:
+                    logger.info("✅ Claude CLI already installed")
+                
+                # Write prompt to file to avoid shell injection
+                prompt_file = "/tmp/claude_prompt.txt"
+                await sandbox.filesystem.write(prompt_file, prompt)
+                
+                # Run Claude with the prompt from file
+                claude_result = await asyncio.wait_for(
+                    sandbox.process.start_and_wait(
+                        f'cd /workspace/repo && claude < {prompt_file}'
+                    ),
+                    timeout=self.AGENT_TIMEOUT
+                )
+                
+                if claude_result.exit_code != 0:
+                    raise Exception(f"Claude agent failed: {claude_result.stderr or 'Unknown error'}")
+                    
+            except asyncio.TimeoutError:
+                raise Exception(f"Claude agent timed out after {self.AGENT_TIMEOUT} seconds")
+            
+            return {
+                'output': claude_result.stdout,
+                'messages': [
+                    {'role': 'user', 'content': prompt},
+                    {'role': 'assistant', 'content': claude_result.stdout}
+                ]
+            }
     
     async def _run_codex_agent(self, sandbox: Sandbox, prompt: str) -> Dict:
         """Run Codex/GPT agent in the sandbox"""
