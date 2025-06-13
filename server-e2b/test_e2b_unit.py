@@ -52,7 +52,7 @@ def test_auth_functions():
     print("\n2. Testing authentication functions...")
     
     try:
-        from auth import generate_tokens, decode_token
+        from auth import generate_tokens, verify_token
         
         # Test token generation
         test_user_id = "test-user-123"
@@ -62,10 +62,10 @@ def test_auth_functions():
         assert "refresh_token" in tokens
         print("   ✅ Token generation works")
         
-        # Test token decoding
-        decoded = decode_token(tokens["access_token"])
-        assert decoded["sub"] == test_user_id
-        print("   ✅ Token decoding works")
+        # Test token verification
+        decoded = verify_token(tokens["access_token"])
+        assert decoded["user_id"] == test_user_id
+        print("   ✅ Token verification works")
         
         return True
     except Exception as e:
@@ -149,11 +149,11 @@ def test_models():
         from models import TaskStatus
         from test_user_models import TestUserCreateRequest
         
-        # Test TaskStatus enum
-        assert TaskStatus.PENDING.value == "pending"
-        assert TaskStatus.RUNNING.value == "running"
-        assert TaskStatus.COMPLETED.value == "completed"
-        print("   ✅ TaskStatus enum works")
+        # Test TaskStatus class
+        assert TaskStatus.PENDING == "pending"
+        assert TaskStatus.RUNNING == "running"
+        assert TaskStatus.COMPLETED == "completed"
+        print("   ✅ TaskStatus class works")
         
         # Test model validation
         test_request = TestUserCreateRequest(email="test@example.test")
