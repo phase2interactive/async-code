@@ -38,13 +38,21 @@ This guide explains how to build and deploy the custom E2B template for async-co
    
    You should see your template in the list.
 
+## Understanding Template IDs
+
+**IMPORTANT DISTINCTION:**
+- `template_id` in `e2b.toml` = The NAME you choose (e.g., "async-code-agents")
+- `E2B_TEMPLATE_ID` in `.env` = The UNIQUE ID assigned by E2B (e.g., "async-code-agents-abc123")
+
+After building, E2B generates a unique ID. This is what you need!
+
 ## Deploying to Production
 
 1. **Update environment variables**:
    
    Add to your `.env` file:
    ```bash
-   E2B_TEMPLATE_ID=async-code-agents-abc123  # Use your actual template ID
+   E2B_TEMPLATE_ID=async-code-agents-abc123  # Use the E2B-assigned ID, NOT the name from e2b.toml
    ```
 
 2. **Test the template**:
