@@ -178,4 +178,7 @@ class TestCodexAgent:
         
         with patch.object(agent, 'analyze_repository', return_value={"files": [], "languages": []}):
             result = agent.execute_task("Test prompt")
-            assert "rate limit exceeded" in result.lower()
+            # Verify it returns valid JSON
+            parsed = json.loads(result)
+            assert "rate limit exceeded" in parsed["summary"].lower()
+            assert parsed["file_operations"] == []

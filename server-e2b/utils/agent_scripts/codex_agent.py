@@ -217,13 +217,22 @@ Example response format:
             
         except openai.error.RateLimitError:
             logger.error("OpenAI API rate limit exceeded")
-            return "Error: API rate limit exceeded. Please try again later."
+            return json.dumps({
+                "summary": "Error: API rate limit exceeded. Please try again later.",
+                "file_operations": []
+            })
         except openai.error.AuthenticationError:
             logger.error("OpenAI API authentication failed")
-            return "Error: Invalid API key"
+            return json.dumps({
+                "summary": "Error: Invalid API key",
+                "file_operations": []
+            })
         except Exception as e:
             logger.error(f"Error executing task: {e}")
-            return f"Error: {str(e)}"
+            return json.dumps({
+                "summary": f"Error: {str(e)}",
+                "file_operations": []
+            })
     
     def apply_changes(self, response: str) -> bool:
         """

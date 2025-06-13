@@ -70,6 +70,12 @@ def parse_file_changes(response: str) -> List[Dict[str, str]]:
         
     Raises:
         ValueError: If response is not valid JSON or missing required fields
+    
+    Note:
+        This function enforces strict JSON parsing without fallback to ensure
+        reliability. If LLMs fail to produce valid JSON, the prompting strategy
+        or model configuration should be adjusted rather than accepting
+        ambiguous formats.
     """
     changes = parse_json_response(response)
     if changes is None:
