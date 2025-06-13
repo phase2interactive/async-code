@@ -1,5 +1,13 @@
 """
-Utils module for AI code task execution.
+Utilities for E2B task execution.
+
+This module provides the main entry point for executing AI code generation
+tasks in E2B sandboxes. It exports the run_ai_code_task_e2b function which
+handles task execution with automatic fallback between real E2B sandboxes
+and local simulation mode.
+
+The module configures logging and provides a clean interface for the Flask
+application to execute background tasks.
 """
 import logging
 
