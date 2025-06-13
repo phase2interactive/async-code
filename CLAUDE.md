@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Always check the WORKFLOW.md file before starting a tast. 
+check .claude/rules/dev_workflow.md for the development workflow.
 
 ## Common Development Commands
 
