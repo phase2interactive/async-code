@@ -162,7 +162,7 @@ class TestE2BTemplateConfigurations:
         monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
         
     @pytest.mark.parametrize("test_case", E2BTemplateMatrix.get_test_matrix())
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_template_configuration(self, test_case: TemplateTestCase, mock_env, monkeypatch):
         """Test each template configuration in the matrix"""
         logger.info(f"\n{'='*60}")
@@ -244,7 +244,7 @@ class TestE2BTemplateConfigurations:
                     logger.error(f"❌ {test_case.name} failed unexpectedly: {str(e)}")
                     raise
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_template_agent_compatibility(self, mock_env):
         """Test that different agents work with different templates"""
         test_matrix = [
@@ -310,7 +310,7 @@ class TestE2BTemplateConfigurations:
                         logger.error(f"❌ Unexpected failure: {str(e)}")
                         raise
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_template_performance_characteristics(self, mock_env):
         """Test performance characteristics of different templates"""
         performance_tests = [

@@ -117,7 +117,7 @@ class E2BTestFixtures:
 class TestE2BIntegrationWithFixtures:
     """Integration tests using production-like fixtures"""
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_full_task_execution_flow(self):
         """Test complete task execution flow matching production"""
         async with E2BTestFixtures.production_like_executor() as executor:
@@ -156,7 +156,7 @@ class TestE2BIntegrationWithFixtures:
                 # Verify sandbox cleanup
                 mock_sandbox.kill.assert_called_once()
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_error_handling_with_database_updates(self):
         """Test error handling updates database correctly"""
         async with E2BTestFixtures.production_like_executor() as executor:
@@ -181,7 +181,7 @@ class TestE2BIntegrationWithFixtures:
                     error=pytest.StringContaining("Sandbox creation failed")
                 )
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_agent_switching_production_flow(self):
         """Test switching between Claude and Codex agents"""
         async with E2BTestFixtures.production_like_executor() as executor:
@@ -209,7 +209,7 @@ class TestE2BIntegrationWithFixtures:
                 mock_codex.assert_called_once()
                 assert result["agent_output"] == "Codex output"
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_git_operations_with_patches(self):
         """Test git patch generation matching production"""
         async with E2BTestFixtures.production_like_executor() as executor:
@@ -246,7 +246,7 @@ class TestE2BIntegrationWithFixtures:
                 assert any("git commit" in call for call in calls)
                 assert any("git format-patch" in call for call in calls)
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_environment_variable_injection(self):
         """Test environment variables are properly injected into sandbox"""
         custom_env = {
@@ -267,7 +267,7 @@ class TestE2BIntegrationWithFixtures:
                 # Verify sandbox creation included environment setup
                 assert mock_sandbox_class.called
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_concurrent_task_execution(self):
         """Test multiple tasks can execute concurrently"""
         async with E2BTestFixtures.production_like_executor() as executor:
@@ -310,7 +310,7 @@ class TestE2BRealIntegration:
     """Real integration tests that require actual E2B API access"""
     
     @pytest.mark.integration
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_real_sandbox_creation(self):
         """Test creating a real E2B sandbox"""
         if not os.getenv("E2B_API_KEY"):
@@ -335,7 +335,7 @@ class TestE2BRealIntegration:
             sandbox.kill()
     
     @pytest.mark.integration
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_real_git_clone(self):
         """Test real git clone operation in E2B"""
         if not os.getenv("E2B_API_KEY"):
