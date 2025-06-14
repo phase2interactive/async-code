@@ -38,7 +38,7 @@ async def test_e2b_sandbox_creation():
             return False
             
         # Try to create a sandbox
-        sandbox = await Sandbox.create(
+        sandbox = Sandbox(
             api_key=api_key,
             timeout=60  # 1 minute timeout for test
         )
@@ -46,11 +46,11 @@ async def test_e2b_sandbox_creation():
         logger.info("✅ Successfully created E2B sandbox")
         
         # Test basic command execution
-        result = await sandbox.process.start_and_wait("echo 'Hello from E2B!'")
+        result = sandbox.process.start_and_wait("echo 'Hello from E2B!'")
         logger.info(f"✅ Command output: {result.stdout.strip()}")
         
         # Clean up
-        await sandbox.close()
+        sandbox.close()
         logger.info("✅ Sandbox closed successfully")
         
         return True
@@ -69,7 +69,7 @@ async def test_e2b_git_operations():
         
         # Create a test sandbox
         from e2b import Sandbox
-        sandbox = await Sandbox.create(
+        sandbox = Sandbox(
             api_key=executor.api_key,
             timeout=120
         )
@@ -78,8 +78,8 @@ async def test_e2b_git_operations():
         test_repo = "https://github.com/octocat/Hello-World.git"
         logger.info(f"📦 Cloning test repository: {test_repo}")
         
-        clone_result = await sandbox.process.start_and_wait(
-            f"git clone {test_repo} /workspace/test-repo"
+        clone_result = sandbox.process.start_and_wait(
+            f"git clone {test_repo} /home/user/test-repo"
         )
         
         if clone_result.exit_code != 0:
@@ -89,11 +89,11 @@ async def test_e2b_git_operations():
         logger.info("✅ Successfully cloned repository")
         
         # List files
-        ls_result = await sandbox.process.start_and_wait("ls -la /workspace/test-repo")
+        ls_result = sandbox.process.start_and_wait("ls -la /home/user/test-repo")
         logger.info(f"📁 Repository contents:\n{ls_result.stdout}")
         
         # Clean up
-        await sandbox.close()
+        sandbox.close()
         
         return True
         
