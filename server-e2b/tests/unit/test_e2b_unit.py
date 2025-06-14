@@ -10,8 +10,8 @@ import tempfile
 import subprocess
 from datetime import datetime
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_imports():
     """Test that all modules can be imported"""
