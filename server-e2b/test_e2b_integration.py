@@ -46,11 +46,11 @@ async def test_e2b_sandbox_creation():
         logger.info("✅ Successfully created E2B sandbox")
         
         # Test basic command execution
-        result = sandbox.process.start_and_wait("echo 'Hello from E2B!'")
+        result = sandbox.commands.run("echo 'Hello from E2B!'")
         logger.info(f"✅ Command output: {result.stdout.strip()}")
         
         # Clean up
-        sandbox.close()
+        sandbox.kill()
         logger.info("✅ Sandbox closed successfully")
         
         return True
@@ -74,12 +74,19 @@ async def test_e2b_git_operations():
             timeout=120
         )
         
+        # Create workspace in user's home directory (matching production)
+        workspace_path = "/home/user/workspace"
+        mkdir_result = sandbox.commands.run(f"mkdir -p {workspace_path}")
+        if mkdir_result.exit_code != 0:
+            logger.error(f"❌ Failed to create workspace: {mkdir_result.stderr}")
+            return False
+            
         # Clone a small public repo for testing
         test_repo = "https://github.com/octocat/Hello-World.git"
         logger.info(f"📦 Cloning test repository: {test_repo}")
         
-        clone_result = sandbox.process.start_and_wait(
-            f"git clone {test_repo} /home/user/test-repo"
+        clone_result = sandbox.commands.run(
+            f"git clone {test_repo} {workspace_path}/repo"
         )
         
         if clone_result.exit_code != 0:
@@ -89,16 +96,92 @@ async def test_e2b_git_operations():
         logger.info("✅ Successfully cloned repository")
         
         # List files
-        ls_result = sandbox.process.start_and_wait("ls -la /home/user/test-repo")
+        ls_result = sandbox.commands.run(f"ls -la {workspace_path}/repo")
         logger.info(f"📁 Repository contents:\n{ls_result.stdout}")
         
         # Clean up
-        sandbox.close()
+        sandbox.kill()
         
         return True
         
     except Exception as e:
         logger.error(f"❌ Git operations test failed: {str(e)}")
+        return False
+
+
+async def test_missing_workspace_directory_handling():
+    """Test that missing /workspace directory is handled gracefully"""
+    logger.info("🧪 Testing missing workspace directory handling...")
+    
+    try:
+        from e2b import Sandbox
+        executor = E2BCodeExecutor()
+        
+        # Create a sandbox without custom template (simulating default E2B environment)
+        sandbox = Sandbox(
+            api_key=executor.api_key,
+            timeout=60
+        )
+        
+        # First check current working directory
+        pwd_result = sandbox.commands.run("pwd")
+        logger.info(f"Current directory: {pwd_result.stdout.strip()}")
+        
+        # Check if workspace exists in home
+        workspace_path = "/home/user/workspace"
+        try:
+            check_result = sandbox.commands.run(f"ls -la {workspace_path}")
+            workspace_exists = True
+        except Exception:
+            workspace_exists = False
+        
+        if workspace_exists:
+            logger.info(f"ℹ️ {workspace_path} already exists")
+        else:
+            logger.info(f"✅ {workspace_path} doesn't exist (expected)")
+            
+        # Try to clone without creating directory first (should fail)
+        test_repo = "https://github.com/octocat/Hello-World.git"
+        try:
+            clone_result = sandbox.commands.run(
+                f"git clone {test_repo} {workspace_path}/repo"
+            )
+            clone_failed = False
+        except Exception as e:
+            clone_failed = True
+            logger.info(f"Clone failed as expected: {str(e)}")
+        
+        if clone_failed:
+            logger.info("✅ Got expected error without directory")
+            
+            # Now create directory and retry
+            mkdir_result = sandbox.commands.run(f"mkdir -p {workspace_path}")
+            if mkdir_result.exit_code == 0:
+                logger.info("✅ Successfully created workspace directory")
+                
+                # Try clone again
+                clone_retry = sandbox.commands.run(
+                    f"git clone {test_repo} {workspace_path}/repo"
+                )
+                
+                if clone_retry.exit_code == 0:
+                    logger.info("✅ Clone succeeded after creating directory")
+                    sandbox.kill()
+                    return True
+                else:
+                    logger.error(f"❌ Clone still failed: {clone_retry.stderr}")
+            else:
+                logger.error(f"❌ Failed to create directory: {mkdir_result.stderr}")
+        else:
+            logger.info("ℹ️ Clone worked without creating directory (custom template?)")
+            sandbox.kill()
+            return True
+            
+        sandbox.kill()
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Test failed: {str(e)}")
         return False
 
 
@@ -178,6 +261,7 @@ async def main():
     # Run tests
     tests = [
         ("Sandbox Creation", test_e2b_sandbox_creation),
+        ("Missing Workspace Directory Handling", test_missing_workspace_directory_handling),
         ("Git Operations", test_e2b_git_operations),
         # Uncomment to test full execution (requires all env vars)
         # ("Full Execution", test_full_execution),

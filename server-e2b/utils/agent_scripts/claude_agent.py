@@ -64,14 +64,15 @@ class ClaudeAgent:
         }
         
         try:
-            for root, dirs, files in os.walk("/workspace/repo"):
+            workspace_path = os.environ.get('WORKSPACE_PATH', '/home/user/workspace')
+            for root, dirs, files in os.walk(f"{workspace_path}/repo"):
                 # Skip hidden directories
                 dirs[:] = [d for d in dirs if not d.startswith('.')]
                 
                 for file in files:
                     if not file.startswith('.'):
                         file_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(file_path, "/workspace/repo")
+                        relative_path = os.path.relpath(file_path, f"{workspace_path}/repo")
                         repo_info["files"].append(relative_path)
                         
                         # Detect language by extension
@@ -91,7 +92,7 @@ class ClaudeAgent:
                 
                 for dir_name in dirs:
                     dir_path = os.path.join(root, dir_name)
-                    relative_path = os.path.relpath(dir_path, "/workspace/repo")
+                    relative_path = os.path.relpath(dir_path, f"{workspace_path}/repo")
                     repo_info["directories"].append(relative_path)
         
         except Exception as e:
@@ -114,7 +115,8 @@ class ClaudeAgent:
         
         for file_path in priority_files:
             try:
-                full_path = os.path.join("/workspace/repo", file_path)
+                workspace_path = os.environ.get('WORKSPACE_PATH', '/home/user/workspace')
+                full_path = os.path.join(f"{workspace_path}/repo", file_path)
                 with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
                     # Limit content length
