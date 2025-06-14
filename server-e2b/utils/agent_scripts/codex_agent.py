@@ -64,14 +64,15 @@ class CodexAgent:
         }
         
         try:
-            for root, dirs, files in os.walk("/workspace/repo"):
+            workspace_path = os.environ.get('WORKSPACE_PATH', '/home/user/workspace')
+            for root, dirs, files in os.walk(f"{workspace_path}/repo"):
                 # Skip hidden directories
                 dirs[:] = [d for d in dirs if not d.startswith('.')]
                 
                 for file in files:
                     if not file.startswith('.'):
                         file_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(file_path, "/workspace/repo")
+                        relative_path = os.path.relpath(file_path, f"{workspace_path}/repo")
                         repo_info["files"].append(relative_path)
                         
                         # Detect language by extension
@@ -81,7 +82,7 @@ class CodexAgent:
                 
                 for dir_name in dirs:
                     dir_path = os.path.join(root, dir_name)
-                    relative_path = os.path.relpath(dir_path, "/workspace/repo")
+                    relative_path = os.path.relpath(dir_path, f"{workspace_path}/repo")
                     repo_info["directories"].append(relative_path)
         
         except Exception as e:
