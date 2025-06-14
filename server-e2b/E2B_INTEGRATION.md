@@ -82,7 +82,7 @@ python test_e2b_mode.py
 
 ```bash
 cd server-e2b
-python test_e2b_integration.py
+python tests/test_e2b_integration.py
 ```
 
 ### Test API Endpoint

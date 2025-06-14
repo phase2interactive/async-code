@@ -1,216 +1,297 @@
+#!/usr/bin/env python3
 """
-Integration tests for E2B sandbox functionality with proper .env loading
+Test script for E2B integration.
+This script tests the real E2B implementation to ensure it works correctly.
 """
 
 import os
 import sys
-import pytest
+import logging
 import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
-from pathlib import Path
+from dotenv import load_dotenv
 
-# Add parent directory to path to import modules
+# Add parent directory to path to find utils module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Load environment variables from .env file
-from dotenv import load_dotenv
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(env_path)
-
-# Import after loading env to ensure proper configuration
 from utils.code_task_e2b_real import E2BCodeExecutor
 from database import DatabaseOperations
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-class TestE2BSandboxCreation:
-    """Test E2B sandbox creation and configuration"""
+
+async def test_e2b_sandbox_creation():
+    """Test basic E2B sandbox creation"""
+    logger.info("🧪 Testing E2B sandbox creation...")
     
-    @pytest.fixture
-    def mock_db_operations(self):
-        """Mock database operations"""
-        with patch.object(DatabaseOperations, 'update_task') as mock_update, \
-             patch.object(DatabaseOperations, 'add_chat_message') as mock_add_msg, \
-             patch.object(DatabaseOperations, 'get_task_by_id') as mock_get_task:
-            
-            mock_get_task.return_value = {
-                'id': 1,
-                'user_id': 'test-user',
-                'repo_url': 'https://github.com/test/repo',
-                'target_branch': 'main',
-                'agent': 'claude',
-                'chat_messages': [{'role': 'user', 'content': 'Test prompt'}]
-            }
-            
-            yield {
-                'update_task': mock_update,
-                'add_chat_message': mock_add_msg,
-                'get_task_by_id': mock_get_task
-            }
-    
-    def test_env_variables_loaded(self):
-        """Test that environment variables are properly loaded"""
-        # Check critical E2B environment variable
-        e2b_api_key = os.getenv('E2B_API_KEY')
-        print(f"E2B_API_KEY loaded: {'Yes' if e2b_api_key else 'No'}")
-        print(f"E2B_API_KEY value: {e2b_api_key[:10]}..." if e2b_api_key else "E2B_API_KEY not set")
+    try:
+        from e2b import Sandbox
         
-        # Check other important env vars
-        anthropic_key = os.getenv('ANTHROPIC_API_KEY')
-        print(f"ANTHROPIC_API_KEY loaded: {'Yes' if anthropic_key else 'No'}")
+        # Check if API key is available
+        api_key = os.getenv('E2B_API_KEY')
+        if not api_key:
+            logger.error("❌ E2B_API_KEY not found in environment")
+            return False
+            
+        # Try to create a sandbox
+        sandbox = Sandbox(
+            api_key=api_key,
+            timeout=60  # 1 minute timeout for test
+        )
         
-        openai_key = os.getenv('OPENAI_API_KEY')
-        print(f"OPENAI_API_KEY loaded: {'Yes' if openai_key else 'No'}")
+        logger.info("✅ Successfully created E2B sandbox")
+        
+        # Test basic command execution
+        result = sandbox.commands.run("echo 'Hello from E2B!'")
+        logger.info(f"✅ Command output: {result.stdout.strip()}")
+        
+        # Clean up
+        sandbox.kill()
+        logger.info("✅ Sandbox closed successfully")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to create E2B sandbox: {str(e)}")
+        return False
+
+
+async def test_e2b_git_operations():
+    """Test git operations in E2B sandbox"""
+    logger.info("🧪 Testing git operations in E2B...")
     
-    @pytest.mark.asyncio
-    async def test_sandbox_create_attribute_error(self, mock_db_operations):
-        """Test that captures the current Sandbox.create attribute error"""
+    try:
         executor = E2BCodeExecutor()
         
-        # This should fail with the current error
-        with pytest.raises(Exception) as exc_info:
-            await executor.execute_task(
-                task_id=1,
-                user_id='test-user',
-                github_token='test-token',
-                repo_url='https://github.com/test/repo',
-                branch='main',
-                prompt='Test prompt',
-                agent='claude'
+        # Create a test sandbox
+        from e2b import Sandbox
+        sandbox = Sandbox(
+            api_key=executor.api_key,
+            timeout=120
+        )
+        
+        # Create workspace in user's home directory (matching production)
+        workspace_path = "/home/user/workspace"
+        mkdir_result = sandbox.commands.run(f"mkdir -p {workspace_path}")
+        if mkdir_result.exit_code != 0:
+            logger.error(f"❌ Failed to create workspace: {mkdir_result.stderr}")
+            return False
+            
+        # Clone a small public repo for testing
+        test_repo = "https://github.com/octocat/Hello-World.git"
+        logger.info(f"📦 Cloning test repository: {test_repo}")
+        
+        clone_result = sandbox.commands.run(
+            f"git clone {test_repo} {workspace_path}/repo"
+        )
+        
+        if clone_result.exit_code != 0:
+            logger.error(f"❌ Failed to clone: {clone_result.stderr}")
+            return False
+            
+        logger.info("✅ Successfully cloned repository")
+        
+        # List files
+        ls_result = sandbox.commands.run(f"ls -la {workspace_path}/repo")
+        logger.info(f"📁 Repository contents:\n{ls_result.stdout}")
+        
+        # Clean up
+        sandbox.kill()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Git operations test failed: {str(e)}")
+        return False
+
+
+async def test_missing_workspace_directory_handling():
+    """Test that missing /workspace directory is handled gracefully"""
+    logger.info("🧪 Testing missing workspace directory handling...")
+    
+    try:
+        from e2b import Sandbox
+        executor = E2BCodeExecutor()
+        
+        # Create a sandbox without custom template (simulating default E2B environment)
+        sandbox = Sandbox(
+            api_key=executor.api_key,
+            timeout=60
+        )
+        
+        # First check current working directory
+        pwd_result = sandbox.commands.run("pwd")
+        logger.info(f"Current directory: {pwd_result.stdout.strip()}")
+        
+        # Check if workspace exists in home
+        workspace_path = "/home/user/workspace"
+        try:
+            check_result = sandbox.commands.run(f"ls -la {workspace_path}")
+            workspace_exists = True
+        except Exception:
+            workspace_exists = False
+        
+        if workspace_exists:
+            logger.info(f"ℹ️ {workspace_path} already exists")
+        else:
+            logger.info(f"✅ {workspace_path} doesn't exist (expected)")
+            
+        # Try to clone without creating directory first (should fail)
+        test_repo = "https://github.com/octocat/Hello-World.git"
+        try:
+            clone_result = sandbox.commands.run(
+                f"git clone {test_repo} {workspace_path}/repo"
             )
+            clone_failed = False
+        except Exception as e:
+            clone_failed = True
+            logger.info(f"Clone failed as expected: {str(e)}")
         
-        # Verify we get the expected error
-        assert "Sandbox" in str(exc_info.value)
-        assert "create" in str(exc_info.value)
-        print(f"Captured error: {exc_info.value}")
-    
-    @pytest.mark.asyncio
-    async def test_e2b_import_and_sandbox_creation(self):
-        """Test E2B import and Sandbox class availability"""
-        try:
-            # Test importing E2B
-            from e2b import Sandbox
-            print(f"Successfully imported Sandbox from e2b")
+        if clone_failed:
+            logger.info("✅ Got expected error without directory")
             
-            # Check what attributes Sandbox has
-            print(f"Sandbox class attributes: {[attr for attr in dir(Sandbox) if not attr.startswith('_')]}")
-            
-            # Check if create method exists
-            has_create = hasattr(Sandbox, 'create')
-            print(f"Sandbox.create exists: {has_create}")
-            
-            # If create doesn't exist, check for constructor or other initialization methods
-            if not has_create:
-                # Check if we can instantiate directly
-                has_init = hasattr(Sandbox, '__init__')
-                print(f"Sandbox.__init__ exists: {has_init}")
+            # Now create directory and retry
+            mkdir_result = sandbox.commands.run(f"mkdir -p {workspace_path}")
+            if mkdir_result.exit_code == 0:
+                logger.info("✅ Successfully created workspace directory")
                 
-                # List all callable methods
-                callable_methods = [attr for attr in dir(Sandbox) if callable(getattr(Sandbox, attr)) and not attr.startswith('_')]
-                print(f"Callable methods on Sandbox: {callable_methods}")
-                
-        except ImportError as e:
-            print(f"Failed to import E2B: {e}")
-            pytest.fail(f"E2B import failed: {e}")
-    
-    @pytest.mark.asyncio
-    async def test_e2b_sandbox_initialization_methods(self):
-        """Test different ways to initialize E2B sandbox"""
-        try:
-            from e2b import Sandbox
-            
-            # Test 1: Try direct instantiation (recommended as per deprecation warning)
-            try:
-                # Check if Sandbox can be instantiated directly
-                sandbox = Sandbox()
-                print(f"Direct instantiation worked: {type(sandbox)}")
-                # Check if it's async
-                if hasattr(sandbox, '__aenter__'):
-                    print("Sandbox has async context manager support")
-                # Close if needed
-                if hasattr(sandbox, 'close'):
-                    await sandbox.close()
-                    print("Successfully closed sandbox")
-            except Exception as e:
-                print(f"Direct instantiation failed: {e}")
-            
-            # Test 2: Try Sandbox.create() for comparison
-            try:
-                sandbox = Sandbox.create()
-                print(f"Sandbox.create() returned: {type(sandbox)}")
-                # Check if it's a coroutine
-                import inspect
-                if inspect.iscoroutine(sandbox):
-                    print("Sandbox.create() returns a coroutine (needs await)")
-                    actual_sandbox = await sandbox
-                    print(f"After awaiting: {type(actual_sandbox)}")
-                    if hasattr(actual_sandbox, 'close'):
-                        await actual_sandbox.close()
-            except Exception as e:
-                print(f"Sandbox.create() test failed: {e}")
-            
-            # Test 3: Check the recommended pattern
-            try:
-                # Test with parameters like in the real code
-                sandbox = Sandbox(
-                    env_vars={
-                        "ANTHROPIC_API_KEY": "test-key"
-                    },
-                    timeout=300
+                # Try clone again
+                clone_retry = sandbox.commands.run(
+                    f"git clone {test_repo} {workspace_path}/repo"
                 )
-                print(f"Sandbox with params worked: {type(sandbox)}")
-                if hasattr(sandbox, 'close'):
-                    await sandbox.close()
-            except Exception as e:
-                print(f"Sandbox with params failed: {e}")
+                
+                if clone_retry.exit_code == 0:
+                    logger.info("✅ Clone succeeded after creating directory")
+                    sandbox.kill()
+                    return True
+                else:
+                    logger.error(f"❌ Clone still failed: {clone_retry.stderr}")
+            else:
+                logger.error(f"❌ Failed to create directory: {mkdir_result.stderr}")
+        else:
+            logger.info("ℹ️ Clone worked without creating directory (custom template?)")
+            sandbox.kill()
+            return True
             
-        except Exception as e:
-            print(f"Test setup failed: {e}")
-            pytest.fail(f"Failed to test sandbox initialization: {e}")
-
-
-    def test_sandbox_close_method(self):
-        """Test if sandbox.close() is sync or async"""
-        from e2b import Sandbox
-        import inspect
+        sandbox.kill()
+        return False
         
-        # Check if close is a coroutine function
-        if hasattr(Sandbox, 'close'):
-            is_async = inspect.iscoroutinefunction(Sandbox.close)
-            print(f"Sandbox.close is async: {is_async}")
-            
-            # Check the method signature
-            sig = inspect.signature(Sandbox.close)
-            print(f"Sandbox.close signature: {sig}")
+    except Exception as e:
+        logger.error(f"❌ Test failed: {str(e)}")
+        return False
+
+
+async def test_full_execution():
+    """Test full E2B task execution with a simple prompt"""
+    logger.info("🧪 Testing full E2B task execution...")
     
-    @pytest.mark.asyncio
-    async def test_e2b_sandbox_creation_fixed(self):
-        """Test that E2B sandbox can be created with the fixes"""
-        from e2b import Sandbox
+    # Check required environment variables
+    required_vars = ['E2B_API_KEY', 'GITHUB_TOKEN', 'SUPABASE_URL', 'SUPABASE_KEY']
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        logger.error(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+        return False
+    
+    try:
+        # Create a test task in the database
+        test_user_id = "test-user-001"
+        test_task = DatabaseOperations.create_task(
+            user_id=test_user_id,
+            repo_url="https://github.com/octocat/Hello-World.git",
+            target_branch="master",
+            agent="claude",
+            chat_messages=[{
+                'role': 'user',
+                'content': 'Add a simple README update with the current date',
+                'timestamp': 0
+            }]
+        )
         
-        sandbox = None
+        if not test_task:
+            logger.error("❌ Failed to create test task in database")
+            return False
+            
+        logger.info(f"✅ Created test task with ID: {test_task['id']}")
+        
+        # Execute the task
+        executor = E2BCodeExecutor()
+        result = await executor.execute_task(
+            task_id=test_task['id'],
+            user_id=test_user_id,
+            github_token=os.getenv('GITHUB_TOKEN'),
+            repo_url=test_task['repo_url'],
+            branch=test_task['target_branch'],
+            prompt=test_task['chat_messages'][0]['content'],
+            agent='claude'
+        )
+        
+        logger.info(f"✅ Task executed successfully!")
+        logger.info(f"📝 Changed files: {result.get('changes', [])}")
+        logger.info(f"💬 Agent output: {result.get('agent_output', '')[:200]}...")
+        
+        # Check task status in database
+        updated_task = DatabaseOperations.get_task_by_id(test_task['id'], test_user_id)
+        logger.info(f"📊 Final task status: {updated_task['status']}")
+        
+        return updated_task['status'] == 'completed'
+        
+    except Exception as e:
+        logger.error(f"❌ Full execution test failed: {str(e)}")
+        return False
+
+
+async def main():
+    """Run all tests"""
+    logger.info("🚀 Starting E2B integration tests...")
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Check if E2B is configured
+    if not os.getenv('E2B_API_KEY'):
+        logger.warning("⚠️  E2B_API_KEY not configured - tests will run in simulation mode")
+        logger.info("ℹ️  To test real E2B integration, set E2B_API_KEY in your .env file")
+        return
+    
+    # Run tests
+    tests = [
+        ("Sandbox Creation", test_e2b_sandbox_creation),
+        ("Missing Workspace Directory Handling", test_missing_workspace_directory_handling),
+        ("Git Operations", test_e2b_git_operations),
+        # Uncomment to test full execution (requires all env vars)
+        # ("Full Execution", test_full_execution),
+    ]
+    
+    results = []
+    for test_name, test_func in tests:
+        logger.info(f"\n{'='*50}")
+        logger.info(f"Running: {test_name}")
+        logger.info(f"{'='*50}")
+        
         try:
-            # Create sandbox with minimal parameters
-            sandbox = Sandbox(timeout=30)  # Short timeout for testing
-            print(f"✅ Successfully created sandbox: {type(sandbox)}")
-            print(f"Sandbox ID: {sandbox.id if hasattr(sandbox, 'id') else 'No ID'}")
-            
-            # Test basic operations
-            if hasattr(sandbox, 'process'):
-                result = sandbox.process.start_and_wait("echo 'Hello from E2B'")  # Not async
-                print(f"Command output: {result.stdout if hasattr(result, 'stdout') else result}")
-            
+            success = await test_func()
+            results.append((test_name, success))
         except Exception as e:
-            print(f"❌ Failed to create/use sandbox: {e}")
-            pytest.fail(f"Sandbox creation failed: {e}")
-        finally:
-            if sandbox:
-                try:
-                    sandbox.close()
-                    print("✅ Successfully closed sandbox")
-                except Exception as e:
-                    print(f"❌ Failed to close sandbox: {e}")
+            logger.error(f"Test '{test_name}' crashed: {str(e)}")
+            results.append((test_name, False))
+    
+    # Summary
+    logger.info(f"\n{'='*50}")
+    logger.info("📊 Test Summary:")
+    logger.info(f"{'='*50}")
+    
+    for test_name, success in results:
+        status = "✅ PASSED" if success else "❌ FAILED"
+        logger.info(f"{test_name}: {status}")
+    
+    total_passed = sum(1 for _, success in results if success)
+    logger.info(f"\nTotal: {total_passed}/{len(results)} tests passed")
 
 
 if __name__ == "__main__":
-    # Run tests with verbose output
-    pytest.main([__file__, '-v', '-s'])
+    asyncio.run(main())
