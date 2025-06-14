@@ -377,49 +377,60 @@ export default function TasksPage() {
                                     <CardContent className="p-6">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-3 mb-3">
-                                                    <TaskStatusBadge status={task.status || ''} />
-                                                    {task.pr_url && task.pr_number && (
-                                                        <PRStatusBadge 
-                                                            prUrl={task.pr_url}
-                                                            prNumber={task.pr_number}
-                                                            prBranch={task.pr_branch}
-                                                            variant="badge"
-                                                            size="default"
-                                                        />
-                                                    )}
-                                                    <span className="text-sm text-slate-500">
-                                                        Task #{task.id}
-                                                    </span>
-                                                    <span className="text-sm text-slate-500">•</span>
-                                                    <span className="text-sm text-slate-500">
-                                                        {task.agent?.toUpperCase()}
-                                                    </span>
-                                                    {task.project && (
-                                                        <>
-                                                            <span className="text-sm text-slate-500">•</span>
-                                                            <div className="flex items-center gap-1 text-sm text-slate-500">
-                                                                <FolderGit2 className="w-3 h-3" />
-                                                                {task.project.repo_owner}/{task.project.repo_name}
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                                
-                                                <h3 className="font-medium text-slate-900 mb-2 line-clamp-2">
-                                                    {getPromptFromTask(task)}
-                                                </h3>
-                                                
-                                                <div className="flex items-center gap-4 text-sm text-slate-500 mb-3">
-                                                    <div className="flex items-center gap-1">
-                                                        <Github className="w-3 h-3" />
-                                                        <span className="truncate max-w-[200px]">
-                                                            {task.repo_url}
-                                                        </span>
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    <div className="flex-shrink-0 pt-0.5">
+                                                        <TaskStatusBadge status={task.status || ''} iconOnly={true} />
                                                     </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <Calendar className="w-3 h-3" />
-                                                        <span>{new Date(task.created_at || '').toLocaleDateString()}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <h3 className="font-medium text-slate-900 line-clamp-2 text-base">
+                                                                {getPromptFromTask(task)}
+                                                            </h3>
+                                                            {task.pr_url && task.pr_number && (
+                                                                <div className="flex-shrink-0">
+                                                                    <PRStatusBadge 
+                                                                        prUrl={task.pr_url}
+                                                                        prNumber={task.pr_number}
+                                                                        prBranch={task.pr_branch}
+                                                                        prStatus="merged"
+                                                                        variant="badge"
+                                                                        size="sm"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-4 text-sm text-slate-500 mb-2">
+                                                            <span className="text-xs">
+                                                                Task #{task.id}
+                                                            </span>
+                                                            <span className="text-xs">•</span>
+                                                            <span className="text-xs">
+                                                                {task.agent?.toUpperCase()}
+                                                            </span>
+                                                            {task.project && (
+                                                                <>
+                                                                    <span className="text-xs">•</span>
+                                                                    <div className="flex items-center gap-1 text-xs">
+                                                                        <FolderGit2 className="w-3 h-3" />
+                                                                        {task.project.repo_owner}/{task.project.repo_name}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-4 text-sm text-slate-500">
+                                                            <div className="flex items-center gap-1">
+                                                                <Github className="w-3 h-3" />
+                                                                <span className="truncate max-w-[200px] text-xs">
+                                                                    {task.repo_url}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <Calendar className="w-3 h-3" />
+                                                                <span className="text-xs">{new Date(task.created_at || '').toLocaleDateString()}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -451,6 +462,7 @@ export default function TasksPage() {
                                                         prUrl={task.pr_url}
                                                         prNumber={task.pr_number}
                                                         prBranch={task.pr_branch}
+                                                        prStatus="merged"
                                                         variant="button"
                                                         size="sm"
                                                     />

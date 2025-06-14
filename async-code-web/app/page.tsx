@@ -308,10 +308,10 @@ export default function Home() {
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto px-6 py-8 max-w-8xl">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Task Creation */}
-                    <div className="lg:col-span-2 space-y-6">
+            <main className="container mx-auto px-6 py-8 max-w-6xl">
+                <div className="space-y-8">
+                    {/* Task Creation Section */}
+                    <div className="space-y-6">
                         {/* Main Input Card */}
                         <Card>
                             <CardHeader>
@@ -487,7 +487,7 @@ export default function Home() {
                         )}
                     </div>
 
-                    {/* Right Column - Task List */}
+                    {/* Task List Section */}
                     <div className="space-y-6">
                         <Card>
                             <CardHeader>
@@ -566,7 +566,6 @@ export default function Home() {
                                 )}
                             </CardContent>
                         </Card>
-
                     </div>
                 </div>
             </main>

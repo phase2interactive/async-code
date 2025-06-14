@@ -1,4 +1,4 @@
-import { GitPullRequest, ExternalLink } from "lucide-react";
+import { GitPullRequest, ExternalLink, GitMerge } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ interface PRStatusBadgeProps {
     prUrl?: string | null;
     prNumber?: number | null;
     prBranch?: string | null;
+    prStatus?: "open" | "merged" | "closed";
     variant?: "badge" | "button";
     size?: "sm" | "default";
     className?: string;
@@ -16,6 +17,7 @@ export function PRStatusBadge({
     prUrl, 
     prNumber, 
     prBranch, 
+    prStatus = "open",
     variant = "badge",
     size = "sm",
     className 
@@ -30,17 +32,48 @@ export function PRStatusBadge({
         }
     };
 
+    const getStatusConfig = (status: string) => {
+        switch (status) {
+            case "merged":
+                return {
+                    icon: <GitMerge className="w-4 h-4 text-purple-600" />,
+                    text: "Merged",
+                    className: "bg-background text-foreground border-border hover:bg-muted"
+                };
+            case "open":
+                return {
+                    icon: <GitPullRequest className="w-4 h-4 text-green-600" />,
+                    text: "Open",
+                    className: "bg-background text-foreground border-border hover:bg-muted"
+                };
+            case "closed":
+                return {
+                    icon: <GitPullRequest className="w-4 h-4 text-red-600" />,
+                    text: "Closed",
+                    className: "bg-background text-foreground border-border hover:bg-muted"
+                };
+            default:
+                return {
+                    icon: <GitPullRequest className="w-4 h-4 text-blue-600" />,
+                    text: "PR",
+                    className: "bg-background text-foreground border-border hover:bg-muted"
+                };
+        }
+    };
+
+    const config = getStatusConfig(prStatus);
+
     if (variant === "button") {
         return (
             <Button 
                 onClick={handleClick}
                 variant="outline" 
                 size={size}
-                className={cn("gap-2 transition-colors hover:bg-blue-50 hover:border-blue-300", className)}
+                className={cn("gap-2 transition-colors", config.className, className)}
             >
-                <GitPullRequest className="w-4 h-4 text-blue-600" />
-                <span className="text-blue-600">PR #{prNumber}</span>
-                <ExternalLink className="w-3 h-3 text-blue-600" />
+                {config.icon}
+                <span>#{prNumber}</span>
+                <ExternalLink className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4")} />
             </Button>
         );
     }
@@ -51,14 +84,13 @@ export function PRStatusBadge({
             variant="outline" 
             className={cn(
                 "gap-1 cursor-pointer transition-all hover:shadow-sm",
-                "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300",
-                size === "sm" ? "text-xs px-2 py-1" : "text-sm px-3 py-1",
+                config.className,
                 className
             )}
         >
-            <GitPullRequest className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4")} />
-            <span>PR #{prNumber}</span>
-            <ExternalLink className={cn(size === "sm" ? "w-2.5 h-2.5" : "w-3 h-3")} />
+            {config.icon}
+            <span>#{prNumber}</span>
+            <ExternalLink className="w-3 h-3" />
         </Badge>
     );
 }
