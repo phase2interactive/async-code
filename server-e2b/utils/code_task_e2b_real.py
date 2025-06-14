@@ -63,21 +63,28 @@ class E2BCodeExecutor:
                 logger.info(f"🌟 Using custom template: {self.template_id}")
             
             try:
-                create_params = {
+                # Prepare environment variables
+                env_vars = {
+                    "GITHUB_TOKEN": github_token,
+                }
+                if agent == "claude" and os.getenv("ANTHROPIC_API_KEY"):
+                    env_vars["ANTHROPIC_API_KEY"] = os.getenv("ANTHROPIC_API_KEY")
+                elif agent == "codex" and os.getenv("OPENAI_API_KEY"):
+                    env_vars["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+                
+                # Create sandbox using the sync method with env vars
+                sandbox_params = {
                     "api_key": self.api_key,
-                    "env_vars": {
-                        "GITHUB_TOKEN": github_token,
-                        "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY") if agent == "claude" else None,
-                        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY") if agent == "codex" else None,
-                    },
-                    "timeout": self.SANDBOX_TIMEOUT
+                    "timeout": self.SANDBOX_TIMEOUT,
+                    "env_vars": env_vars  # Changed from 'envs' to 'env_vars'
                 }
                 
                 # Add template if configured
                 if self.template_id:
-                    create_params["template"] = self.template_id
+                    sandbox_params["template"] = self.template_id
                 
-                sandbox = await Sandbox.create(**create_params)
+                # Note: Sandbox() is synchronous, not async
+                sandbox = Sandbox(**sandbox_params)
             except Exception as e:
                 if "quota" in str(e).lower():
                     raise Exception("E2B sandbox quota exceeded. Please check your E2B account limits.")
@@ -99,7 +106,8 @@ class E2BCodeExecutor:
             
             try:
                 clone_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         f"git clone -b {branch} {auth_repo_url} /workspace/repo"
                     ),
                     timeout=self.CLONE_TIMEOUT
@@ -119,14 +127,15 @@ class E2BCodeExecutor:
             
             # Configure git
             await asyncio.wait_for(
-                sandbox.process.start_and_wait(
+                asyncio.to_thread(
+                    sandbox.process.start_and_wait,
                     "cd /workspace/repo && git config user.email 'ai-assistant@e2b.dev' && git config user.name 'AI Assistant'"
                 ),
                 timeout=self.COMMAND_TIMEOUT
             )
             
             # Record initial state
-            initial_ls = await sandbox.process.start_and_wait("ls -la /workspace/repo")
+            initial_ls = await asyncio.to_thread(sandbox.process.start_and_wait, "ls -la /workspace/repo")
             
             # Execute AI agent based on type
             logger.info(f"🤖 Running {agent} agent with prompt: {prompt[:100]}...")
@@ -143,7 +152,8 @@ class E2BCodeExecutor:
             
             # Get git status
             status_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
+                asyncio.to_thread(
+                    sandbox.process.start_and_wait,
                     "cd /workspace/repo && git status --porcelain"
                 ),
                 timeout=self.COMMAND_TIMEOUT
@@ -151,7 +161,8 @@ class E2BCodeExecutor:
             
             # Get git diff
             diff_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
+                asyncio.to_thread(
+                    sandbox.process.start_and_wait,
                     "cd /workspace/repo && git diff"
                 ),
                 timeout=self.COMMAND_TIMEOUT
@@ -178,7 +189,8 @@ class E2BCodeExecutor:
             if changed_files:
                 # Stage all changes
                 await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         "cd /workspace/repo && git add -A"
                     ),
                     timeout=self.COMMAND_TIMEOUT
@@ -187,7 +199,8 @@ class E2BCodeExecutor:
                 # Create commit
                 commit_message = f"AI: {prompt[:50]}..."
                 commit_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         f'cd /workspace/repo && git commit -m "{commit_message}"'
                     ),
                     timeout=self.COMMAND_TIMEOUT
@@ -195,7 +208,8 @@ class E2BCodeExecutor:
                 
                 # Get commit hash
                 hash_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         "cd /workspace/repo && git rev-parse HEAD"
                     ),
                     timeout=self.COMMAND_TIMEOUT
@@ -204,7 +218,8 @@ class E2BCodeExecutor:
                 
                 # Generate patch
                 patch_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         "cd /workspace/repo && git format-patch -1 --stdout"
                     ),
                     timeout=self.COMMAND_TIMEOUT
@@ -232,9 +247,8 @@ class E2BCodeExecutor:
             }
             
             # Process file changes for detailed diff view
-            if diff_result.stdout:
-                file_changes = parse_file_changes(diff_result.stdout)
-                update_data['file_changes'] = file_changes
+            # Note: file_changes column doesn't exist in the database
+            # The changed_files JSONB column is already being updated above
             
             # Add agent output as chat message
             if result.get('output'):
@@ -276,7 +290,7 @@ class E2BCodeExecutor:
             # Always close the sandbox
             if sandbox:
                 try:
-                    await sandbox.close()
+                    sandbox.close()  # close() is synchronous for Sandbox
                     logger.info(f"🧹 Cleaned up sandbox for task {task_id}")
                 except Exception as e:
                     logger.error(f"Failed to close sandbox: {e}")
@@ -296,13 +310,16 @@ class E2BCodeExecutor:
                 script = f.read()
             
             # Write the script and prompt to sandbox
-            await sandbox.filesystem.write("/tmp/claude_agent.py", script)
-            await sandbox.filesystem.write("/tmp/agent_prompt.txt", prompt)
+            await asyncio.to_thread(sandbox.filesystem.write, "/tmp/claude_agent.py", script)
+            await asyncio.to_thread(sandbox.filesystem.write, "/tmp/agent_prompt.txt", prompt)
             
             try:
                 # Check if anthropic is already installed (in custom template)
                 check_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait("python3 -c 'import anthropic'"),
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
+                        "python3 -c 'import anthropic'"
+                    ),
                     timeout=5
                 )
                 
@@ -310,7 +327,8 @@ class E2BCodeExecutor:
                 if check_result.exit_code != 0:
                     logger.info("📦 Installing Anthropic SDK...")
                     await asyncio.wait_for(
-                        sandbox.process.start_and_wait(
+                        asyncio.to_thread(
+                            sandbox.process.start_and_wait,
                             "pip install anthropic"
                         ),
                         timeout=self.CLONE_TIMEOUT
@@ -320,7 +338,8 @@ class E2BCodeExecutor:
                 
                 # Run the Claude agent
                 claude_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         "cd /workspace/repo && python3 /tmp/claude_agent.py"
                     ),
                     timeout=self.AGENT_TIMEOUT
@@ -345,7 +364,10 @@ class E2BCodeExecutor:
             try:
                 # Check if Claude CLI is already installed (in custom template)
                 check_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait("which claude"),
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
+                        "which claude"
+                    ),
                     timeout=5
                 )
                 
@@ -353,7 +375,8 @@ class E2BCodeExecutor:
                 if check_result.exit_code != 0:
                     logger.info("📦 Installing Claude CLI...")
                     install_result = await asyncio.wait_for(
-                        sandbox.process.start_and_wait(
+                        asyncio.to_thread(
+                            sandbox.process.start_and_wait,
                             "npm install -g @anthropic-ai/claude-cli"
                         ),
                         timeout=self.CLONE_TIMEOUT
@@ -363,11 +386,12 @@ class E2BCodeExecutor:
                 
                 # Write prompt to file to avoid shell injection
                 prompt_file = "/tmp/claude_prompt.txt"
-                await sandbox.filesystem.write(prompt_file, prompt)
+                await asyncio.to_thread(sandbox.filesystem.write, prompt_file, prompt)
                 
                 # Run Claude with the prompt from file
                 claude_result = await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         f'cd /workspace/repo && claude < {prompt_file}'
                     ),
                     timeout=self.AGENT_TIMEOUT
@@ -421,13 +445,16 @@ print(response.choices[0].message.content)
 '''
         
         # Write the script and prompt to sandbox
-        await sandbox.filesystem.write("/tmp/codex_agent.py", script)
-        await sandbox.filesystem.write("/tmp/agent_prompt.txt", prompt)
+        await asyncio.to_thread(sandbox.filesystem.write, "/tmp/codex_agent.py", script)
+        await asyncio.to_thread(sandbox.filesystem.write, "/tmp/agent_prompt.txt", prompt)
         
         try:
             # Check if OpenAI is already installed (in custom template)
             check_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait("python3 -c 'import openai'"),
+                asyncio.to_thread(
+                    sandbox.process.start_and_wait,
+                    "python3 -c 'import openai'"
+                ),
                 timeout=5
             )
             
@@ -435,7 +462,8 @@ print(response.choices[0].message.content)
             if check_result.exit_code != 0:
                 logger.info("📦 Installing OpenAI SDK...")
                 await asyncio.wait_for(
-                    sandbox.process.start_and_wait(
+                    asyncio.to_thread(
+                        sandbox.process.start_and_wait,
                         "pip install openai"
                     ),
                     timeout=self.CLONE_TIMEOUT  # Use clone timeout for install
@@ -445,7 +473,8 @@ print(response.choices[0].message.content)
             
             # Run the agent
             codex_result = await asyncio.wait_for(
-                sandbox.process.start_and_wait(
+                asyncio.to_thread(
+                    sandbox.process.start_and_wait,
                     "cd /workspace/repo && python /tmp/codex_agent.py"
                 ),
                 timeout=self.AGENT_TIMEOUT

@@ -131,9 +131,8 @@ def run_ai_code_task_e2b(task_id: int, user_id: str, github_token: str,
                 }
                 
                 # Process file changes for detailed diff view
-                if result.get("git_diff"):
-                    file_changes = parse_file_changes(result["git_diff"])
-                    update_data["file_changes"] = file_changes
+                # Note: file_changes column doesn't exist in the database
+                # The changed_files JSONB column is already being updated above
                 
                 # Add agent output as chat message
                 if result.get("output"):
