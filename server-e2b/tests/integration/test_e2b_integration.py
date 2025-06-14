@@ -11,7 +11,7 @@ import asyncio
 from dotenv import load_dotenv
 
 # Add parent directory to path to find utils module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from utils.code_task_e2b_real import E2BCodeExecutor
 from database import DatabaseOperations
