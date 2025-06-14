@@ -58,7 +58,7 @@ After building, E2B generates a unique ID. This is what you need!
 2. **Test the template**:
    ```bash
    # From server-e2b directory
-   python test_e2b_integration.py
+   python tests/test_e2b_integration.py
    ```
 
 3. **Deploy your application**:
